@@ -1,0 +1,26 @@
+
+package net.sourceforge.pmd.lang;
+
+import java.io.Reader;
+import java.util.Map;
+
+import net.sourceforge.pmd.lang.ast.Node;
+import net.sourceforge.pmd.lang.java.ast.ParseException;
+
+
+public interface Parser {
+    
+    ParserOptions getParserOptions();
+    
+    
+    TokenManager getTokenManager(String fileName, Reader source);
+
+    
+    boolean canParse();
+
+    
+    Node parse(String fileName, Reader source) throws ParseException;
+
+    
+    Map<Integer, String> getSuppressMap();
+}

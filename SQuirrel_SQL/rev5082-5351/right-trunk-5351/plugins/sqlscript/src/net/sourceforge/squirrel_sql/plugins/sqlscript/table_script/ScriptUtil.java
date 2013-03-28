@@ -1,0 +1,106 @@
+package net.sourceforge.squirrel_sql.plugins.sqlscript.table_script;
+
+import java.util.Hashtable;
+
+import net.sourceforge.squirrel_sql.client.session.ISession;
+import net.sourceforge.squirrel_sql.fw.sql.ITableInfo;
+import net.sourceforge.squirrel_sql.fw.dialects.DialectUtils;
+import net.sourceforge.squirrel_sql.plugins.sqlscript.prefs.SQLScriptPreferenceBean;
+import net.sourceforge.squirrel_sql.plugins.sqlscript.prefs.SQLScriptPreferencesManager;
+
+
+public class ScriptUtil
+{
+	
+   private static SQLScriptPreferenceBean prefs = 
+	   							SQLScriptPreferencesManager.getPreferences();
+    
+   Hashtable<String, String> _uniqueColNames = new Hashtable<String, String>();
+
+   
+   public String getColumnDef(String sColumnName, String sType, int columnSize, int decimalDigits)
+   {
+      String decimalDigitsString = 0 == decimalDigits ? "" : "," + decimalDigits;
+
+      sColumnName = makeColumnNameUnique(sColumnName);
+
+      StringBuffer sbColDef = new StringBuffer();
+      String sLower = sType.toLowerCase();
+      sbColDef.append(sColumnName).append(" ");
+      sbColDef.append(sType);
+
+      if (sLower.indexOf("char") != -1)
+      {
+         sbColDef.append("(");
+         sbColDef.append(columnSize).append(decimalDigitsString);
+         sbColDef.append(")");
+      }
+      else if (sLower.equals("numeric"))
+      {
+         sbColDef.append("(");
+         sbColDef.append(columnSize).append(decimalDigitsString);
+         sbColDef.append(")");
+      }
+      else if (sLower.equals("number"))
+      {
+         sbColDef.append("(");
+         sbColDef.append(columnSize).append(decimalDigitsString);
+         sbColDef.append(")");
+      }
+      else if (sLower.equals("decimal"))
+      {
+         sbColDef.append("(");
+         sbColDef.append(columnSize).append(decimalDigitsString);
+         sbColDef.append(")");
+      }
+
+      return sbColDef.toString();
+   }
+
+   
+   public String makeColumnNameUnique(String sColumnName)
+   {
+      return makeColumnNameUniqueIntern(sColumnName, 0);
+   }
+
+   private String makeColumnNameUniqueIntern(String sColumnName, int postFixSeed)
+   {
+      String upperCaseColumnName = sColumnName.toUpperCase();
+      String sRet = sColumnName;
+
+      if(0 < postFixSeed)
+      {
+         sRet += "_" + postFixSeed;
+         upperCaseColumnName += "_" + postFixSeed;
+      }
+
+      if(null == _uniqueColNames.get(upperCaseColumnName))
+      {
+         _uniqueColNames.put(upperCaseColumnName,upperCaseColumnName);
+         return sRet;
+      }
+      else
+      {
+         return makeColumnNameUniqueIntern(sColumnName, ++postFixSeed);
+      }
+   }
+
+   public static String getStatementSeparator(ISession session)
+   {
+      String statementSeparator = session.getQueryTokenizer().getSQLStatementSeparator();
+
+      if (1 < statementSeparator.length())
+      {
+         statementSeparator = "\n" + statementSeparator + "\n";
+      }
+
+      return statementSeparator;
+   }
+
+   
+   public static String getTableName(ITableInfo ti) 
+   {
+      return DialectUtils.formatQualified(ti.getSimpleName(), ti.getSchemaName(), prefs.isQualifyTableNames(), prefs.isUseDoubleQuotes());
+   }
+
+}

@@ -1,0 +1,202 @@
+using System; 
+using System.Diagnostics; 
+using System.IO; 
+using System.Windows.Forms; 
+using Microsoft.Win32; namespace  Microsoft.Office.OneNote {
+	
+ public sealed class  Application {
+		
+  private  Application()
+  {
+  }
+ 
+  public static  void Activate()
+  {
+   Process[] processes = Process.GetProcessesByName("onenote");
+   if (processes.Length > 0)
+   {
+    IntPtr window = processes[0].MainWindowHandle;
+    if (NativeMethods.IsIconic(window))
+    {
+     NativeMethods.ShowWindowAsync(window, NativeMethods.SW_RESTORE);
+    }
+    if (window == NativeMethods.GetForegroundWindow())
+     return;
+    IntPtr thread = NativeMethods.GetWindowThreadProcessId(window, IntPtr.Zero);
+    IntPtr foregroundThread = NativeMethods.GetWindowThreadProcessId(NativeMethods.GetForegroundWindow(), IntPtr.Zero);
+    if (thread != foregroundThread)
+    {
+     NativeMethods.AttachThreadInput(foregroundThread, thread, 1 );
+     NativeMethods.SetForegroundWindow(window);
+     NativeMethods.AttachThreadInput(foregroundThread, thread, 0 );
+    }
+    else
+    {
+     NativeMethods.SetForegroundWindow(window);
+    }
+   }
+   else
+   {
+    Process.Start(GetExecutablePath());
+   }
+  }
+ 
+  public static  void StartSideNote()
+  {
+   Process.Start(GetExecutablePath(), "/sidenote");
+  }
+ 
+  public static  void Open(string sectionPath)
+  {
+   Open(sectionPath, false);
+  }
+ 
+  public static  void Open(string sectionPath, bool openReadOnly)
+  {
+   string arguments = RootSectionPath(sectionPath);
+   if (openReadOnly)
+    arguments = "/openro " + arguments;
+   Process.Start(GetExecutablePath(), arguments);
+  }
+ 
+  public static  void Print(string sectionPath)
+  {
+   string arguments = "/print " + RootSectionPath(sectionPath);
+   Process.Start(GetExecutablePath(), arguments);
+  }
+ 
+  public static  void StartVideoNote()
+  {
+   Process.Start(GetExecutablePath(), "/videonote");
+  }
+ 
+  public static  void StartVideoNote(string recordingProfilePath)
+  {
+   Process.Start(GetExecutablePath(), "/recordingprofile " + recordingProfilePath + " /videonote");
+  }
+ 
+  public static  void StartVideoNote(string videoDevice, string audioDevice)
+  {
+   Process.Start(GetExecutablePath(), "/videonote " + videoDevice + " " + audioDevice);
+  }
+ 
+  public static  void StartVideoNote(string videoDevice, string audioDevice, string recordingProfilePath)
+  {
+   Process.Start(GetExecutablePath(), "/videonote " + videoDevice + " " + audioDevice + " " + recordingProfilePath);
+  }
+ 
+  public static  void StartAudioNote()
+  {
+   Process.Start(GetExecutablePath(), "/audionote");
+  }
+ 
+  public static  void PauseRecording()
+  {
+   Process.Start(GetExecutablePath(), "/pauserecording");
+  }
+ 
+  public static  void StopRecording()
+  {
+   Process.Start(GetExecutablePath(), "/stoprecording");
+  }
+ 
+  public static  void StartSharedSession()
+  {
+   Process.Start(GetExecutablePath(), "/startsharing");
+  }
+ 
+  public static  void StartSharedSession(string password, string sectionPath)
+  {
+   string arguments = "/startsharing " + password + " " + RootSectionPath(sectionPath);
+   Process.Start(GetExecutablePath(), arguments);
+  }
+ 
+  public static  void JoinSharedSession(string sessionAddress)
+  {
+   Process.Start(GetExecutablePath(), "/joinsharing " + sessionAddress);
+  }
+ 
+  public static  void JoinSharedSession(string sessionAddress, string password, string sectionPath)
+  {
+   string arguments = "/joinsharing " + password + " " + RootSectionPath(sectionPath);
+   Process.Start(GetExecutablePath(), arguments);
+  }
+ 
+  public static  string GetNotebookPath()
+  {
+   string notebookPath = "My Notebook";
+   string saveKey = "Software\\Microsoft\\Office\\11.0\\OneNote\\Options\\Save";
+   using (RegistryKey saveOptions = Registry.CurrentUser.OpenSubKey(saveKey))
+   {
+    if (saveOptions != null)
+     notebookPath = saveOptions.GetValue("My Notebook path", notebookPath).ToString();
+   }
+   string documentsFolder = Environment.GetFolderPath(Environment.SpecialFolder.Personal);
+   return Path.Combine(documentsFolder, notebookPath);
+  }
+ 
+  public static  string PromptForSectionPath()
+  {
+   using (OpenFileDialog openFileDialog = new OpenFileDialog())
+   {
+    openFileDialog.Title = "Insert into Section";
+    openFileDialog.CheckFileExists = false;
+    openFileDialog.CheckPathExists = false;
+    openFileDialog.InitialDirectory = GetNotebookPath();
+    openFileDialog.Filter = "OneNote Sections (*.one)|*.one|All files (*.*)|*.*";
+    openFileDialog.FilterIndex = 1;
+    openFileDialog.RestoreDirectory = true;
+    if (openFileDialog.ShowDialog() == DialogResult.OK)
+    {
+     return openFileDialog.FileName;
+    }
+   }
+   return null;
+  }
+ 
+  public static  string GetExecutablePath()
+  {
+   string exePath = null;
+   string comRegistration = "CLSID\\{22148139-F1FC-4EB0-B237-DFCD8A38EFFC}\\LocalServer32";
+   using (RegistryKey localServer = Registry.ClassesRoot.OpenSubKey(comRegistration))
+   {
+    if (localServer != null)
+     exePath = (string) localServer.GetValue(null);
+   }
+   if (exePath != null)
+   {
+    if (exePath.StartsWith("\""))
+     exePath = exePath.Remove(0, 1);
+    if (exePath.EndsWith("\""))
+     exePath = exePath.Remove(exePath.Length - 1, 1);
+   }
+   return exePath;
+  }
+ 
+  public static  FileVersionInfo GetVersion()
+  {
+   string exePath = GetExecutablePath();
+   if (exePath != null)
+   {
+    return FileVersionInfo.GetVersionInfo(exePath);
+   }
+   return null;
+  }
+ 
+  private static  string RootSectionPath(string sectionPath)
+  {
+   if (!Path.IsPathRooted(sectionPath))
+   {
+    sectionPath = Path.Combine(GetNotebookPath(), sectionPath);
+   }
+   sectionPath = sectionPath.Trim();
+   if (!sectionPath.StartsWith("\""))
+    sectionPath = "\"" + sectionPath;
+   if (!sectionPath.EndsWith("\""))
+    sectionPath = sectionPath + "\"";
+   return sectionPath;
+  }
+
+	}
+
+}

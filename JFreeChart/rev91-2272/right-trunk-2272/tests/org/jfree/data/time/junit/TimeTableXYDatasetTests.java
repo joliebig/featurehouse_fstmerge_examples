@@ -1,0 +1,143 @@
+
+
+package org.jfree.data.time.junit;
+
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.ObjectInput;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutput;
+import java.io.ObjectOutputStream;
+import java.util.TimeZone;
+
+import junit.framework.Test;
+import junit.framework.TestCase;
+import junit.framework.TestSuite;
+
+import org.jfree.data.time.TimeTableXYDataset;
+import org.jfree.data.time.Year;
+
+
+public class TimeTableXYDatasetTests extends TestCase {
+
+    
+    public static Test suite() {
+        return new TestSuite(TimeTableXYDatasetTests.class);
+    }
+
+    
+    public TimeTableXYDatasetTests(String name) {
+        super(name);
+    }
+
+    private static final double DELTA = 0.0000000001;
+
+    
+    public void testStandard() {
+        TimeTableXYDataset d = new TimeTableXYDataset();
+        d.add(new Year(1999), 1.0, "Series 1");
+        assertEquals(d.getItemCount(), 1);
+        assertEquals(d.getSeriesCount(), 1);
+        d.add(new Year(2000), 2.0, "Series 2");
+        assertEquals(d.getItemCount(), 2);
+        assertEquals(d.getSeriesCount(), 2);
+        assertEquals(d.getYValue(0, 0), 1.0, DELTA);
+        assertTrue(Double.isNaN(d.getYValue(0, 1)));
+        assertTrue(Double.isNaN(d.getYValue(1, 0)));
+        assertEquals(d.getYValue(1, 1), 2.0, DELTA);
+    }
+
+    
+    public void testGetTimePeriod()  {
+        TimeTableXYDataset d = new TimeTableXYDataset();
+        d.add(new Year(1999), 1.0, "Series 1");
+        d.add(new Year(1998), 2.0, "Series 1");
+        d.add(new Year(1996), 3.0, "Series 1");
+        assertEquals(d.getTimePeriod(0), new Year(1996));
+        assertEquals(d.getTimePeriod(1), new Year(1998));
+        assertEquals(d.getTimePeriod(2), new Year(1999));
+    }
+
+    
+    public void testEquals() {
+        TimeTableXYDataset d1 = new TimeTableXYDataset();
+        TimeTableXYDataset d2 = new TimeTableXYDataset();
+        assertTrue(d1.equals(d2));
+        assertTrue(d2.equals(d1));
+
+        d1.add(new Year(1999), 123.4, "S1");
+        assertFalse(d1.equals(d2));
+        d2.add(new Year(1999), 123.4, "S1");
+        assertTrue(d1.equals(d2));
+
+        d1.setDomainIsPointsInTime(!d1.getDomainIsPointsInTime());
+        assertFalse(d1.equals(d2));
+        d2.setDomainIsPointsInTime(!d2.getDomainIsPointsInTime());
+        assertTrue(d1.equals(d2));
+
+        d1 = new TimeTableXYDataset(TimeZone.getTimeZone("GMT"));
+        d2 = new TimeTableXYDataset(TimeZone.getTimeZone(
+                "America/Los_Angeles"));
+        assertFalse(d1.equals(d2));
+    }
+
+    
+    public void testClone() {
+
+        TimeTableXYDataset d = new TimeTableXYDataset();
+        d.add(new Year(1999), 25.0, "Series");
+
+        TimeTableXYDataset clone = null;
+        try {
+            clone = (TimeTableXYDataset) d.clone();
+        }
+        catch (CloneNotSupportedException e) {
+            assertTrue(false);
+        }
+        assertTrue(clone.equals(d));
+
+        
+        clone.add(new Year(2004), 1.2, "SS");
+        assertFalse(clone.equals(d));
+    }
+
+    
+    public void testSerialization() {
+
+        TimeTableXYDataset d1 = new TimeTableXYDataset();
+        d1.add(new Year(1999), 123.4, "S1");
+        TimeTableXYDataset d2 = null;
+
+        try {
+            ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+            ObjectOutput out = new ObjectOutputStream(buffer);
+            out.writeObject(d1);
+            out.close();
+
+            ObjectInput in = new ObjectInputStream(new ByteArrayInputStream(
+                    buffer.toByteArray()));
+            d2 = (TimeTableXYDataset) in.readObject();
+            in.close();
+        }
+        catch (Exception e) {
+            e.printStackTrace();
+        }
+        assertTrue(d1.equals(d2));
+
+    }
+
+    
+    public void testClear() {
+        TimeTableXYDataset d = new TimeTableXYDataset();
+        d.add(new Year(1999), 1.0, "Series 1");
+        assertEquals(d.getItemCount(), 1);
+        assertEquals(d.getSeriesCount(), 1);
+        d.add(new Year(2000), 2.0, "Series 2");
+
+        d.clear();
+        
+        assertEquals(0, d.getItemCount());
+        assertEquals(0, d.getSeriesCount());
+    }
+
+}

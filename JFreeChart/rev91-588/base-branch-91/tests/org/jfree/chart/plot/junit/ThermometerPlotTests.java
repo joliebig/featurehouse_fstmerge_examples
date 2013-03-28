@@ -1,0 +1,203 @@
+
+
+package org.jfree.chart.plot.junit;
+
+import java.awt.BasicStroke;
+import java.awt.Color;
+import java.awt.Font;
+import java.awt.GradientPaint;
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.ObjectInput;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutput;
+import java.io.ObjectOutputStream;
+import java.text.DecimalFormat;
+
+import junit.framework.Test;
+import junit.framework.TestCase;
+import junit.framework.TestSuite;
+
+import org.jfree.chart.plot.ThermometerPlot;
+import org.jfree.ui.RectangleInsets;
+
+
+public class ThermometerPlotTests extends TestCase {
+
+    
+    public static Test suite() {
+        return new TestSuite(ThermometerPlotTests.class);
+    }
+
+    
+    public ThermometerPlotTests(String name) {
+        super(name);
+    }
+
+    
+    public void testEquals() {
+    	ThermometerPlot p1 = new ThermometerPlot();
+    	ThermometerPlot p2 = new ThermometerPlot();
+    	assertTrue(p1.equals(p2));
+    	assertTrue(p2.equals(p1));
+        
+        
+        p1.setPadding(new RectangleInsets(1.0, 2.0, 3.0, 4.0));
+        assertFalse(p1.equals(p2));
+        p2.setPadding(new RectangleInsets(1.0, 2.0, 3.0, 4.0));
+        assertTrue(p2.equals(p1));
+
+        
+        BasicStroke s = new BasicStroke(1.23f);
+        p1.setThermometerStroke(s);
+        assertFalse(p1.equals(p2));
+        p2.setThermometerStroke(s);
+        assertTrue(p2.equals(p1));
+
+        
+        p1.setThermometerPaint(new GradientPaint(1.0f, 2.0f, Color.blue, 
+                3.0f, 4.0f, Color.red));
+        assertFalse(p1.equals(p2));
+        p2.setThermometerPaint(new GradientPaint(1.0f, 2.0f, Color.blue, 
+                3.0f, 4.0f, Color.red));
+        assertTrue(p2.equals(p1));
+        
+        
+        p1.setUnits(ThermometerPlot.UNITS_KELVIN);
+        assertFalse(p1.equals(p2));
+        p2.setUnits(ThermometerPlot.UNITS_KELVIN);
+        assertTrue(p2.equals(p1));
+        
+        
+        p1.setValueLocation(ThermometerPlot.LEFT);
+        assertFalse(p1.equals(p2));
+        p2.setValueLocation(ThermometerPlot.LEFT);
+        assertTrue(p2.equals(p1));
+        
+        
+        p1.setAxisLocation(ThermometerPlot.RIGHT);
+        assertFalse(p1.equals(p2));
+        p2.setAxisLocation(ThermometerPlot.RIGHT);
+        assertTrue(p2.equals(p1));
+        
+        
+        p1.setValueFont(new Font("Serif", Font.PLAIN, 9));
+        assertFalse(p1.equals(p2));
+        p2.setValueFont(new Font("Serif", Font.PLAIN, 9));
+        assertTrue(p2.equals(p1));
+        
+        
+        p1.setValuePaint(new GradientPaint(4.0f, 5.0f, Color.red, 
+                6.0f, 7.0f, Color.white));
+        assertFalse(p1.equals(p2));
+        p2.setValuePaint(new GradientPaint(4.0f, 5.0f, Color.red, 
+                6.0f, 7.0f, Color.white));
+        assertTrue(p2.equals(p1));
+        
+        
+        p1.setValueFormat(new DecimalFormat("0.0000"));
+        assertFalse(p1.equals(p2));
+        p2.setValueFormat(new DecimalFormat("0.0000"));
+        assertTrue(p2.equals(p1));
+        
+        
+        p1.setMercuryPaint(new GradientPaint(9.0f, 8.0f, Color.red, 
+                7.0f, 6.0f, Color.blue));
+        assertFalse(p1.equals(p2));
+        p2.setMercuryPaint(new GradientPaint(9.0f, 8.0f, Color.red, 
+                7.0f, 6.0f, Color.blue));
+        assertTrue(p2.equals(p1));
+        
+        
+        p1.setShowValueLines(true);
+        assertFalse(p1.equals(p2));
+        p2.setShowValueLines(true);
+        assertTrue(p2.equals(p1));
+        
+        p1.setSubrange(1, 1.0, 2.0);
+        assertFalse(p1.equals(p2));
+        p2.setSubrange(1, 1.0, 2.0);
+        assertTrue(p2.equals(p1));
+        
+        p1.setSubrangePaint(1, new GradientPaint(1.0f, 2.0f, Color.red, 
+                3.0f, 4.0f, Color.yellow));
+        assertFalse(p1.equals(p2));
+        p2.setSubrangePaint(1, new GradientPaint(1.0f, 2.0f, Color.red, 
+                3.0f, 4.0f, Color.yellow));
+        assertTrue(p2.equals(p1));
+        
+    }
+    
+    
+    public void testCloning() {
+        ThermometerPlot p1 = new ThermometerPlot();
+        ThermometerPlot p2 = null;
+        try {
+            p2 = (ThermometerPlot) p1.clone();
+        }
+        catch (CloneNotSupportedException e) {
+            e.printStackTrace();
+        }
+        assertTrue(p1 != p2);
+        assertTrue(p1.getClass() == p2.getClass());
+        assertTrue(p1.equals(p2));
+    }
+    
+    
+    public void testSerialization() {
+
+        ThermometerPlot p1 = new ThermometerPlot();
+        ThermometerPlot p2 = null;
+
+        try {
+            ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+            ObjectOutput out = new ObjectOutputStream(buffer);
+            out.writeObject(p1);
+            out.close();
+
+            ObjectInput in = new ObjectInputStream(
+                    new ByteArrayInputStream(buffer.toByteArray()));
+            p2 = (ThermometerPlot) in.readObject();
+            in.close();
+        }
+        catch (Exception e) {
+            e.printStackTrace();
+        }
+        assertTrue(p1.equals(p2));
+
+    }
+
+    
+    public void testSerialization2() {
+        ThermometerPlot p1 = new ThermometerPlot();
+        p1.setSubrangePaint(1, new GradientPaint(1.0f, 2.0f, Color.red, 3.0f, 
+                4.0f, Color.blue));
+        ThermometerPlot p2 = null;
+
+        try {
+            ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+            ObjectOutput out = new ObjectOutputStream(buffer);
+            out.writeObject(p1);
+            out.close();
+
+            ObjectInput in = new ObjectInputStream(
+                    new ByteArrayInputStream(buffer.toByteArray()));
+            p2 = (ThermometerPlot) in.readObject();
+            in.close();
+        }
+        catch (Exception e) {
+            e.printStackTrace();
+        }
+        assertTrue(p1.equals(p2));
+    }
+    
+    
+    public void testSetUnits() {
+        ThermometerPlot p1 = new ThermometerPlot();
+        assertEquals(ThermometerPlot.UNITS_CELCIUS, p1.getUnits());
+        p1.setUnits("FAHRENHEIT");  
+        assertEquals(ThermometerPlot.UNITS_CELCIUS, p1.getUnits());
+        p1.setUnits("\u");     
+        assertEquals(ThermometerPlot.UNITS_FAHRENHEIT, p1.getUnits());
+    }
+}

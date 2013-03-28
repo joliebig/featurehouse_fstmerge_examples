@@ -1,0 +1,149 @@
+import os
+import pickle
+STATS_FILENAME = "performance_statistics_database.pik"
+class Stats:
+    def __init__(self, config, data_directory):
+        self.config = config
+        self.stored_statistics_fn = os.path.join(data_directory,
+                                                 STATS_FILENAME)
+        if os.path.exists(self.stored_statistics_fn):
+            self.Load()
+        else:
+            self.ResetTotal()
+        self.Reset()
+    def Reset(self):
+        self.num_ham = self.num_spam = self.num_unsure = 0
+        self.num_deleted_spam = self.num_deleted_spam_fn  = 0
+        self.num_recovered_good = self.num_recovered_good_fp = 0
+    def ResetTotal(self, permanently=False):
+        self.totals = {}
+        for stat in ["num_ham", "num_spam", "num_unsure",
+                     "num_deleted_spam", "num_deleted_spam_fn",
+                     "num_recovered_good", "num_recovered_good_fp",]:
+            self.totals[stat] = 0
+        if permanently:
+            try:
+                os.remove(self.stored_statistics_fn)
+            except OSError:
+                pass
+    def Load(self):
+        store = open(self.stored_statistics_fn, 'rb')
+        self.totals = pickle.load(store)
+        store.close()
+    def Store(self):
+        for stat in ["num_ham", "num_spam", "num_unsure",
+                     "num_deleted_spam", "num_deleted_spam_fn",
+                     "num_recovered_good", "num_recovered_good_fp",]:
+            self.totals[stat] += getattr(self, stat)
+        store = open(self.stored_statistics_fn, 'wb')
+        pickle.dump(self.totals, store)
+        store.close()
+        self.Reset()
+    def RecordClassification(self, score):
+        score *= 100 # same units as our config values.
+        if score >= self.config.filter.spam_threshold:
+            self.num_spam += 1
+        elif score >= self.config.filter.unsure_threshold:
+            self.num_unsure += 1
+        else:
+            self.num_ham += 1
+    def RecordManualClassification(self, recover_as_good, score):
+        score *= 100 # same units as our config values.
+        if recover_as_good:
+            self.num_recovered_good += 1
+            if score > self.config.filter.spam_threshold:
+                self.num_recovered_good_fp += 1
+        else:
+            self.num_deleted_spam += 1
+            if score < self.config.filter.unsure_threshold:
+                self.num_deleted_spam_fn += 1
+    def GetStats(self, session_only=False):
+        """Return a description of the statistics.
+        If session_only is True, then only a description of the statistics
+        since we were last reset.  Otherwise, lifetime statistics (i.e.
+        those including the ones loaded).
+        Users probably care most about persistent statistics, so present
+        those by default.  If session-only stats are desired, then a
+        special call to here can be made.
+        """
+        num_seen = self.num_ham + self.num_spam + self.num_unsure
+        if not session_only:
+            totals = self.totals
+            num_seen += (totals["num_ham"] + totals["num_spam"] +
+                         totals["num_unsure"])
+        if num_seen==0:
+            return ["SpamBayes has processed zero messages"]
+        chunks = []
+        push = chunks.append
+        if session_only:
+            num_ham = self.num_ham
+            num_spam = self.num_spam
+            num_unsure = self.num_unsure
+            num_recovered_good = self.num_recovered_good
+            num_recovered_good_fp = self.num_recovered_good_fp
+            num_deleted_spam = self.num_deleted_spam
+            num_deleted_spam_fn = self.num_deleted_spam_fn
+        else:
+            num_ham = self.num_ham + self.totals["num_ham"]
+            num_spam = self.num_spam + self.totals["num_spam"]
+            num_unsure = self.num_unsure + self.totals["num_unsure"]
+            num_recovered_good = self.num_recovered_good + \
+                                 self.totals["num_recovered_good"]
+            num_recovered_good_fp = self.num_recovered_good_fp + \
+                                    self.totals["num_recovered_good_fp"]
+            num_deleted_spam = self.num_deleted_spam + \
+                               self.totals["num_deleted_spam"]
+            num_deleted_spam_fn = self.num_deleted_spam_fn + \
+                                  self.totals["num_deleted_spam_fn"]
+        perc_ham = 100.0 * num_ham / num_seen
+        perc_spam = 100.0 * num_spam / num_seen
+        perc_unsure = 100.0 * self.num_unsure / num_seen
+        format_dict = locals().copy()
+        del format_dict["self"]
+        del format_dict["push"]
+        del format_dict["chunks"]
+        format_dict.update(dict(perc_spam=perc_spam, perc_ham=perc_ham,
+                                perc_unsure=perc_unsure, num_seen=num_seen))
+        push("SpamBayes has processed %(num_seen)d messages - " \
+             "%(num_ham)d (%(perc_ham).0f%%) good, " \
+             "%(num_spam)d (%(perc_spam).0f%%) spam " \
+             "and %(num_unsure)d (%(perc_unsure).0f%%) unsure" % format_dict)
+        if num_recovered_good:
+            push("%(num_recovered_good)d message(s) were manually " \
+                 "classified as good (with %(num_recovered_good_fp)d " \
+                 "being false positives)" % format_dict)
+        else:
+            push("No messages were manually classified as good")
+        if num_deleted_spam:
+            push("%(num_deleted_spam)d message(s) were manually " \
+                 "classified as spam (with %(num_deleted_spam_fn)d " \
+                 "being false negatives)" % format_dict)
+        else:
+            push("No messages were manually classified as spam")
+        return chunks
+if __name__=='__main__':
+    class FilterConfig:
+        unsure_threshold = 15
+        spam_threshold = 85
+    class Config:
+        filter = FilterConfig()
+    data_directory = os.getcwd()
+    s = Stats(Config(), data_directory)
+    print "\n".join(s.GetStats())
+    s = Stats(Config(), data_directory)
+    s.RecordClassification(.2)
+    print "\n".join(s.GetStats())
+    s = Stats(Config(), data_directory)
+    s.RecordClassification(.2)
+    s.RecordClassification(.1)
+    s.RecordClassification(.4)
+    s.RecordClassification(.9)
+    s.RecordManualClassification(True, 0.1)
+    s.RecordManualClassification(True, 0.9)
+    s.RecordManualClassification(False, 0.1)
+    s.RecordManualClassification(False, 0.9)
+    print "\n".join(s.GetStats())
+    s.Store()
+    s = Stats(Config(), data_directory)
+    print "\n".join(s.GetStats())
+    print "\n".join(s.GetStats(True))

@@ -1,0 +1,70 @@
+./rev2895-2929/result
+Semistructured merge
+(3, 154, 0, 0, 207, 1)
+LOC with comments: 287671
+LOC without comments: 152846
+Unstructured merge
+(3, 834, 2, 0, 207, 2)
+LOC with comments: 151875
+LOC without comments: 151639
+
+./rev2895-2954/result
+Semistructured merge
+(0, 0, 0, 0, 0, 0)
+LOC with comments: 0
+LOC without comments: 0
+Unstructured merge
+(0, 0, 0, 0, 0, 0)
+LOC with comments: 0
+LOC without comments: 0
+
+./rev2895-2991/result
+Semistructured merge
+(0, 0, 0, 0, 0, 0)
+LOC with comments: 0
+LOC without comments: 0
+Unstructured merge
+(0, 0, 0, 0, 0, 0)
+LOC with comments: 0
+LOC without comments: 0
+
+./rev2895-2993/result
+Semistructured merge
+(0, 0, 0, 0, 0, 0)
+LOC with comments: 0
+LOC without comments: 0
+Unstructured merge
+(0, 0, 0, 0, 0, 0)
+LOC with comments: 0
+LOC without comments: 0
+
+./rev3177-3237/result
+Semistructured merge
+(0, 0, 0, 0, 0, 0)
+LOC with comments: 0
+LOC without comments: 0
+Unstructured merge
+(0, 0, 0, 0, 0, 0)
+LOC with comments: 0
+LOC without comments: 0
+
+./rev3177-3275/result
+Semistructured merge
+(0, 0, 0, 0, 0, 0)
+LOC with comments: 0
+LOC without comments: 0
+Unstructured merge
+(0, 0, 0, 0, 0, 0)
+LOC with comments: 0
+LOC without comments: 0
+
+./rev3177-3296/result
+Semistructured merge
+(0, 0, 0, 0, 0, 0)
+LOC with comments: 0
+LOC without comments: 0
+Unstructured merge
+(0, 0, 0, 0, 0, 0)
+LOC with comments: 0
+LOC without comments: 0
+

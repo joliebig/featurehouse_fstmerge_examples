@@ -1,0 +1,30 @@
+
+
+package net.sourceforge.pmd.lang.java.ast;
+
+public class ASTBlock extends AbstractJavaNode {
+    public ASTBlock(int id) {
+        super(id);
+    }
+
+    public ASTBlock(JavaParser p, int id) {
+        super(p, id);
+    }
+
+
+    
+    public Object jjtAccept(JavaParserVisitor visitor, Object data) {
+        return visitor.visit(this, data);
+    }
+
+    private boolean containsComment;
+
+    public boolean containsComment() {
+        return this.containsComment;
+    }
+
+    public void setContainsComment() {
+        this.containsComment = true;
+    }
+
+}

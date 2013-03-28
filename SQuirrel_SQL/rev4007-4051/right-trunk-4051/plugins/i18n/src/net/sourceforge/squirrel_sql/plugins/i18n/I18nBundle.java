@@ -1,0 +1,225 @@
+package net.sourceforge.squirrel_sql.plugins.i18n;
+
+import net.sourceforge.squirrel_sql.client.IApplication;
+import net.sourceforge.squirrel_sql.fw.util.StringManager;
+import net.sourceforge.squirrel_sql.fw.util.StringManagerFactory;
+
+import java.io.File;
+import java.io.FileOutputStream;
+import java.io.PrintWriter;
+import java.io.IOException;
+import java.util.Properties;
+import java.util.Locale;
+import java.util.Arrays;
+import java.util.prefs.Preferences;
+import java.net.URL;
+
+public class I18nBundle implements Comparable<I18nBundle>
+{
+
+	private static final StringManager s_stringMgr =
+		StringManagerFactory.getStringManager(I18nProps.class);
+
+	private I18nProps _defaultProps;
+	private Locale _locale;
+	private File _workDir;
+	private URL[] _sourceUrls;
+	private Integer _missingTranslationsCount;
+
+    private static final String PREF_KEY_INCLUDE_TIMESTAMP = "SquirrelSQL.i18n.includeTimestamp";
+    
+	
+	private I18nProps _localizedProps;
+
+	public I18nBundle(I18nProps defaultProps, Locale locale, File workDir, URL[] sourceUrls)
+	{
+		_defaultProps = defaultProps;
+		_locale = locale;
+		_workDir = workDir;
+		_sourceUrls = sourceUrls;
+	}
+
+
+
+	private void initMissingTranslationsCount()
+	{
+		if(null != _missingTranslationsCount)
+		{
+			return;
+		}
+
+		Properties buf = _defaultProps.getTranslateableProperties();
+		if(null != _localizedProps)
+		{
+			_localizedProps.removeProps(buf);
+		}
+
+		if(null != _workDir)
+		{
+			File pathInWorkDir = getPathRelativeTo(_workDir);
+			if(pathInWorkDir.exists())
+			{
+				new I18nProps(pathInWorkDir, _sourceUrls).removeProps(buf);
+			}
+		}
+
+		_missingTranslationsCount = Integer.valueOf(buf.size());
+	}
+
+	public void setLocalizedProp(I18nProps localizedProps)
+	{
+		_localizedProps = localizedProps;
+	}
+
+	public String toString()
+	{
+		return _defaultProps.getPath();
+	}
+
+	public String getName()
+	{
+		return _defaultProps.getName();
+	}
+
+	public Integer getMissingTranslationsCount()
+	{
+		initMissingTranslationsCount();
+		return _missingTranslationsCount;
+	}
+
+
+	public void writeMissingProps(IApplication app, File workDir)
+	{
+		try
+		{
+			Properties propsToAppend = _defaultProps.getTranslateableProperties();
+
+			File toAppendTo = getPathRelativeTo(workDir);
+			if(toAppendTo.exists())
+			{
+				new I18nProps(toAppendTo, _sourceUrls).removeProps(propsToAppend);
+			}
+			else
+			{
+				toAppendTo.getParentFile().mkdirs();
+				if(null != _localizedProps)
+				{
+					_localizedProps.copyTo(toAppendTo);
+
+					Object[] params =
+						new Object[]
+						{
+							_localizedProps.getPath(),
+							toAppendTo.getPath()
+						};
+
+					app.getMessageHandler().showMessage(s_stringMgr.getString("I18n.PropsCopyMsg", params));
+					
+
+					new I18nProps(toAppendTo, _sourceUrls).removeProps(propsToAppend);
+				}
+			}
+
+
+
+			FileOutputStream fos = new FileOutputStream(toAppendTo, true);
+			PrintWriter pw = new PrintWriter(fos);
+
+            String includeTimestamp = 
+                Preferences.userRoot().get(PREF_KEY_INCLUDE_TIMESTAMP, "true");
+
+            if (includeTimestamp.equals("true")) {
+                
+                
+                String msg = 
+                    s_stringMgr.getString("I18n.TranlationsGenerationMessage", 
+                                          new java.util.Date());
+                pw.println(msg);
+            }
+			
+
+			String[] keys = propsToAppend.keySet().toArray(new String[0]);
+			Arrays.sort(keys);
+
+
+			for (int i = 0; i < keys.length; i++)
+			{
+				String val = propsToAppend.getProperty(keys[i]);
+
+				pw.println();
+				pw.println("#" + keys[i] + "=" + I18nUtils.normalizePropVal(val));
+				pw.println("#" + keys[i] + "=");
+			}
+
+
+
+			pw.flush();
+			fos.flush();
+
+			pw.close();
+			fos.close();
+
+			Object[] params =
+				new Object[]
+				{
+					Integer.valueOf(propsToAppend.size()),
+					toAppendTo.getPath()
+				};
+
+			app.getMessageHandler().showMessage(s_stringMgr.getString("I18n.TranslationsGenerationCount", params));
+			
+		}
+		catch (IOException e)
+		{
+			throw new RuntimeException(e);
+		}
+
+	}
+
+	File getPathRelativeTo(File parentDir)
+	{
+		File toAppendTo = new File(parentDir.getPath() + File.separator + getName());
+		String localizedFileName = _defaultProps.getLocalizedFileName(_locale);
+		toAppendTo = new File(toAppendTo.getParent() + File.separator + localizedFileName);
+		return toAppendTo;
+	}
+
+	public int compareTo(I18nBundle other)
+	{
+		return getName().compareTo(other.getName());
+	}
+
+
+
+    
+    @Override
+    public int hashCode() {
+        final int prime = 31;
+        int result = 1;
+        result = prime * result
+                + ((getName() == null) ? 0 : getName().hashCode());
+        return result;
+    }
+
+
+
+    
+    @Override
+    public boolean equals(Object obj) {
+        if (this == obj)
+            return true;
+        if (obj == null)
+            return false;
+        if (getClass() != obj.getClass())
+            return false;
+        final I18nBundle other = (I18nBundle) obj;
+        if (getName() == null) {
+            if (other.getName() != null)
+                return false;
+        } else if (!getName().equals(other.getName()))
+            return false;
+        return true;
+    }
+	
+	
+}

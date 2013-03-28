@@ -1,0 +1,150 @@
+using System;
+using System.Collections;
+using System.Windows.Forms;
+using Infragistics.Win.UltraWinTree;
+using NewsComponents.Collections;
+using NewsComponents.Utils;
+using RssBandit;
+using NewsComponents;
+using NewsComponents.Feed;
+using Logger = RssBandit.Common.Logging;
+namespace RssBandit
+{
+ internal class ThreadWorker:ThreadWorkerBase {
+  public enum Task {
+   LoadFeedlist,
+   LoadSpecialFeeds,
+   RefreshFeeds,
+   RefreshCategoryFeeds,
+   TransformFeed,
+   LoadCommentFeed,
+   TransformCategory,
+   RefreshCommentFeeds
+  }
+  protected override Exception DoTaskWork(ThreadWorkerTaskBase task) {
+   RssBanditApplication app = ((ThreadWorkerTask) task).Application;
+   int maxTasks = 0, currentTask = 0;
+   bool force = false;
+   UltraTreeNode feedNode;
+   string stylesheet, html;
+   switch ((Task)task.TaskID) {
+    case Task.LoadFeedlist:
+     app.LoadFeedList();
+     break;
+    case Task.LoadSpecialFeeds:
+     app.InitializeFlaggedItems();
+     break;
+    case Task.RefreshFeeds:
+     force = (bool)task.Arguments[0];
+     app.FeedHandler.RefreshFeeds(force);
+     break;
+    case Task.RefreshCommentFeeds:
+     force = (bool)task.Arguments[0];
+     app.CommentFeedsHandler.RefreshFeeds(force);
+     break;
+    case Task.RefreshCategoryFeeds:
+     string category = (string)task.Arguments[0];
+     force = (bool)task.Arguments[1];
+     app.FeedHandler.RefreshFeeds(category, force);
+     break;
+    case Task.LoadCommentFeed:
+     INewsItem item = (INewsItem)task.Arguments[0];
+     if (item == null)
+      throw new InvalidOperationException("Non-Null task argument 'item' expected.");
+     NewsFeed cmtFeed = new NewsFeed();
+     cmtFeed.link = item.CommentRssUrl;
+     cmtFeed.title = item.Feed.title;
+     if (!string.IsNullOrEmpty(item.Feed.authUser)) {
+      string u = null, p = null;
+      FeedSource.GetFeedCredentials(item.Feed, ref u, ref p);
+      FeedSource.SetFeedCredentials(cmtFeed, u, p);
+     }
+     object result = RssParser.DownloadItemsFromFeed(cmtFeed, app.FeedHandler.Proxy, app.FeedHandler.Offline);
+     RaiseBackgroundTaskFinished(task, maxTasks, currentTask, null, new object[]{result, item, task.Arguments[1], task.Arguments[2]});
+     return null;
+    case Task.TransformFeed:
+     FeedInfo feed = (FeedInfo)task.Arguments[0];
+     feedNode = (UltraTreeNode)task.Arguments[1];
+     stylesheet = (string)task.Arguments[2];
+     html = app.FormatFeed(stylesheet, feed);
+     RaiseBackgroundTaskFinished(task, maxTasks, currentTask, null,
+      new object[]{feedNode, html});
+     return null;
+    case Task.TransformCategory:
+     FeedInfoList feeds = (FeedInfoList)task.Arguments[0];
+     feedNode = (UltraTreeNode)task.Arguments[1];
+     stylesheet = (string)task.Arguments[2];
+     html = app.FormatFeeds(stylesheet, feeds);
+     RaiseBackgroundTaskFinished(task, maxTasks, currentTask, null,
+      new object[]{feedNode, html});
+     return null;
+    default:
+     throw new InvalidOperationException("Unhandled ThreadWorker Task: " + task.TaskID);
+   }
+   RaiseBackgroundTaskFinished(task, maxTasks, currentTask, null, null);
+   return null;
+  }
+  public ThreadWorker():
+   base() {
+  }
+  public ThreadWorker (ThreadWorkerTask task):
+   base(task) {
+  }
+ }
+ internal class ThreadWorkerTask: ThreadWorkerTaskBase {
+  public ThreadWorkerTask(ThreadWorker.Task task, ThreadWorkerProgressHandler progressHandler, RssBanditApplication application, params object[] args):
+   base(task, progressHandler, args) {
+   this.app = application;
+  }
+  public RssBanditApplication Application { get { return this.app; } }
+  private readonly RssBanditApplication app;
+  public override ThreadWorkerBase GetWorkerInstance() {
+   return new ThreadWorker(this);
+  }
+ }
+ internal sealed class ThreadResultManager {
+  private RssBanditApplication owner;
+  private PriorityQueue resultInfos;
+  private System.Windows.Forms.Timer processResult;
+  public ThreadResultManager(RssBanditApplication owner, System.Windows.Forms.Timer uiDispatcher) {
+   this.owner = owner;
+   this.processResult = uiDispatcher;
+   resultInfos = PriorityQueue.Synchronize(new PriorityQueue());
+   this.owner.FeedHandler.UpdateFeedStarted += new FeedSource.UpdateFeedStartedHandler(this.OnUpdateFeedStarted);
+   this.owner.FeedHandler.OnUpdatedFeed += new FeedSource.UpdatedFeedCallback(this.OnUpdatedFeed);
+   this.owner.FeedHandler.OnUpdateFeedException += new FeedSource.UpdateFeedExceptionCallback(this.OnUpdateFeedException);
+   processResult.Tick += new EventHandler(OnProcessResultTick);
+   processResult.Interval = 250;
+   processResult.Start();
+  }
+  private void OnProcessResultTick(object sender, EventArgs e) {
+   if (resultInfos.Count > 0) {
+    ThreadResultInfo t = (ThreadResultInfo)resultInfos.Dequeue();
+    if (t.Args is FeedSource.UpdateFeedEventArgs) {
+     this.owner.OnUpdateFeedStarted(t.sender, (FeedSource.UpdateFeedEventArgs)t.Args);
+    } else if (t.Args is FeedSource.UpdatedFeedEventArgs) {
+     this.owner.OnUpdatedFeed(t.sender, (FeedSource.UpdatedFeedEventArgs)t.Args);
+    } else if (t.Args is FeedSource.UpdateFeedExceptionEventArgs) {
+     this.owner.OnUpdateFeedException(t.sender, (FeedSource.UpdateFeedExceptionEventArgs)t.Args);
+    }
+   }
+  }
+  private void OnUpdateFeedStarted(object sender, FeedSource.UpdateFeedEventArgs e) {
+   this.resultInfos.Enqueue(e.Priority, new ThreadResultInfo(sender, e));
+  }
+  private void OnUpdatedFeed(object sender, FeedSource.UpdatedFeedEventArgs e) {
+   this.resultInfos.Enqueue(e.Priority, new ThreadResultInfo(sender, e));
+  }
+  private void OnUpdateFeedException(object sender, FeedSource.UpdateFeedExceptionEventArgs e) {
+   this.resultInfos.Enqueue(e.Priority, new ThreadResultInfo(sender, e));
+  }
+  class ThreadResultInfo {
+   public ThreadResultInfo(object sender, EventArgs args) {
+    this.sender = sender;
+    this.Args = args;
+   }
+   public readonly object sender;
+   public readonly EventArgs Args;
+  }
+ }
+}

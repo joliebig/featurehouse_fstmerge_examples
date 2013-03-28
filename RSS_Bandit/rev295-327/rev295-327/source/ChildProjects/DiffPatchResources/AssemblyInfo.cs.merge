@@ -1,0 +1,14 @@
+using System.Reflection;
+[assembly: AssemblyTitle("DiffPatchResources")]
+[assembly: AssemblyDescription("Diff/Patch .NET resource files")]
+[assembly: AssemblyConfiguration("")]
+[assembly: AssemblyCompany("")]
+[assembly: AssemblyProduct("")]
+[assembly: AssemblyCopyright("Torsten Rendelmann; http://www.rendelmann.info")]
+[assembly: AssemblyTrademark("")]
+[assembly: AssemblyCulture("")]
+[assembly: AssemblyVersion("1.1.0.1")]
+[assembly: AssemblyDelaySign(false)]
+[assembly: AssemblyKeyFile("")]
+[assembly: AssemblyKeyName("")]
+

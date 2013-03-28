@@ -1,0 +1,495 @@
+using System;
+using System.Collections;
+using System.Collections.Specialized;
+using System.Diagnostics;
+using System.IO;
+using System.Runtime.Serialization;
+using System.Text;
+using System.Windows.Forms;
+using System.Xml;
+namespace RssBandit.Utility.Keyboard
+{
+ public sealed class ShortcutHandler
+ {
+  Hashtable _shortcuts = new Hashtable();
+  Hashtable _displayedShortcuts = new Hashtable();
+  string[] _availableMenuCommands = null;
+  string[] _availableComboCommands = null;
+  public ShortcutHandler()
+  {}
+  public void Load(Stream stream)
+  {
+   try
+   {
+    _shortcuts.Clear();
+    _displayedShortcuts.Clear();
+    XmlTextReader reader = null;
+    try
+    {
+     reader = new XmlTextReader(stream);
+     PopulateShortcuts(reader);
+    }
+    finally
+    {
+     if(reader != null)
+      reader.Close();
+    }
+   }
+   catch(InvalidShortcutSettingsFileException)
+   {
+    throw;
+   }
+   catch(Exception e)
+   {
+    throw new InvalidShortcutSettingsFileException("The Shortcut Settings File is not valid.", e);
+   }
+  }
+  public void Load(string path)
+  {
+   try
+   {
+    Load(File.OpenRead(path));
+   }
+   catch(FileNotFoundException e)
+   {
+    throw new InvalidShortcutSettingsFileException("The Shortcut Settings File was not found.", e);
+   }
+  }
+  public void Write(string path)
+  {
+   Write(path, Encoding.UTF8);
+  }
+  public void Write(string path, Encoding encoding)
+  {
+   XmlTextWriter writer = null;
+   try
+   {
+    writer = new XmlTextWriter(path, encoding);
+    writer.Formatting = Formatting.Indented;
+    writer.Indentation = 1;
+    writer.IndentChar = '\t';
+    writer.WriteStartDocument(true);
+    writer.WriteStartElement("shortcuts");
+    WriteMenuShortcuts(writer);
+    WriteKeyComboShortcuts(writer);
+    writer.WriteEndElement();
+    writer.WriteEndDocument();
+   }
+   finally
+   {
+    if(writer != null)
+     writer.Close();
+   }
+  }
+  void WriteMenuShortcuts(XmlWriter writer)
+  {
+   writer.WriteStartElement("menu");
+   foreach(string command in AvailableMenuCommands)
+   {
+    if(!_shortcuts.ContainsKey(command))
+     continue;
+    writer.WriteStartElement("shortcut");
+    if(_displayedShortcuts.ContainsKey(command))
+     writer.WriteAttributeString("display", "true");
+    writer.WriteElementString("command", command);
+    writer.WriteElementString("shortcutEnumValue", _shortcuts[command].ToString());
+    writer.WriteEndElement();
+   }
+   writer.WriteEndElement();
+  }
+  void WriteKeyComboShortcuts(XmlWriter writer)
+  {
+   writer.WriteStartElement("keyboardCombinations");
+   foreach(string command in AvailableKeyComboCommands)
+   {
+    if(!_shortcuts.ContainsKey(command))
+     continue;
+    writer.WriteStartElement("shortcut");
+    writer.WriteElementString("command", command);
+    ArrayList keyCombos = _shortcuts[command] as ArrayList;
+    foreach(Keys key in keyCombos)
+    {
+     writer.WriteElementString("keyCombination", key.ToString());
+    }
+    writer.WriteEndElement();
+   }
+   writer.WriteEndElement();
+  }
+  public bool IsDefined(string command)
+  {
+   return _shortcuts.ContainsKey(command);
+  }
+  public Keys[] GetKeyCombinations(string command)
+  {
+   ArrayList list = _shortcuts[command] as ArrayList;
+   if(list == null)
+    return new Keys[] {Keys.None};
+   Keys[] keyCombos = new Keys[list.Count];
+   int i = 0;
+   foreach(Keys key in list)
+   {
+    keyCombos[i++] = key;
+   }
+   return keyCombos;
+  }
+  public void RemoveKeyCombination(string command, int index)
+  {
+   ArrayList list = _shortcuts[command] as ArrayList;
+   list.RemoveAt(index);
+  }
+  public Shortcut GetShortcut(string command)
+  {
+   try
+   {
+    if(_shortcuts[command] != null)
+     return (Shortcut)_shortcuts[command];
+    else
+     return Shortcut.None;
+   }
+   catch(InvalidCastException e)
+   {
+    throw new FormatException("The command \"" + command + "\" is incorrect.  Did not expect type " + _shortcuts[command].GetType().FullName, e);
+   }
+  }
+  public void SetShortcut(string command, Shortcut shortcut)
+  {
+   SetShortcut(command, shortcut, false);
+  }
+  public void SetShortcut(string command, Shortcut shortcut, bool displayed)
+  {
+   _shortcuts[command] = shortcut;
+   if(displayed)
+    _displayedShortcuts[command] = string.Empty;
+  }
+  public bool IsShortcutDisplayed(string command)
+  {
+   return _displayedShortcuts.ContainsKey(command);
+  }
+  public bool IsCommandInvoked(string command, IntPtr wParam)
+  {
+   if(!_shortcuts.ContainsKey(command))
+    return false;
+   Keys pressedKeys = ((Keys)(int)wParam | Control.ModifierKeys);
+   return IsCommandInvoked(command, pressedKeys);
+  }
+  public bool IsCommandInvoked(string command, Keys keys)
+  {
+   if(!_shortcuts.ContainsKey(command))
+    return false;
+   try
+   {
+    ArrayList keyCombos = (ArrayList)_shortcuts[command];
+    foreach(Keys keyCombo in keyCombos)
+    {
+     if(keys == keyCombo)
+      return true;
+    }
+   }
+   catch(InvalidCastException e)
+   {
+    throw new FormatException("The command \"" + command + "\" is incorrect.  Did not expect type " + _shortcuts[command].GetType().FullName, e);
+   }
+   return false;
+  }
+  delegate void NodeReader(XmlReader reader);
+  void ReadNode(XmlReader reader, string thisNodeName, NodeReader subNodeReaderDelegate, string subNodeName)
+  {
+   while(reader.Read())
+   {
+    XmlNodeType nodeType = reader.MoveToContent();
+    if(nodeType == XmlNodeType.Element && reader.Name == subNodeName)
+    {
+     subNodeReaderDelegate(reader);
+    }
+    if(nodeType == XmlNodeType.EndElement && reader.Name == thisNodeName)
+    {
+     return;
+    }
+   }
+  }
+  void PopulateShortcuts(XmlReader reader)
+  {
+   while(reader.Read())
+   {
+    XmlNodeType currentNodeType = reader.MoveToContent();
+    if(currentNodeType == XmlNodeType.Element && reader.Name == "keyboardCombinations")
+     ReadNode(reader, "keyboardCombinations", new NodeReader(ReadKeyComboShortcut), "shortcut");
+    if(currentNodeType == XmlNodeType.Element && reader.Name == "menu")
+     ReadNode(reader, "menu", new NodeReader(ReadMenuShortcut), "shortcut");
+   }
+  }
+  void ReadKeyComboShortcut(XmlReader reader)
+  {
+   string command = string.Empty;
+   Keys keyCombo = Keys.None;
+   while(reader.Read())
+   {
+    XmlNodeType nodeType = reader.MoveToContent();
+    if(nodeType == XmlNodeType.Element)
+    {
+     if(reader.Name == "command")
+      command = reader.ReadString();
+     else if(reader.Name == "keyCombination")
+     {
+      keyCombo = ReadKeyCombination(reader);
+      this.AddKeyboardCombination(command, keyCombo);
+     }
+    }
+    if(nodeType == XmlNodeType.EndElement && reader.Name == "shortcut")
+    {
+     return;
+    }
+   }
+   Debug.Assert(false, "Should never reach here");
+  }
+  void ReadMenuShortcut(XmlReader reader)
+  {
+   string command = string.Empty;
+   Shortcut shortcut = Shortcut.None;
+   bool display = false;
+   if(reader.GetAttribute("display") != null && reader.GetAttribute("display").Length > 0)
+    display = bool.Parse(reader.GetAttribute("display"));
+   while(reader.Read())
+   {
+    XmlNodeType nodeType = reader.MoveToContent();
+    if(nodeType == XmlNodeType.Element)
+    {
+     if(reader.Name == "command")
+     {
+      command = reader.ReadString();
+     }
+     else if(reader.Name == "shortcutEnumValue")
+     {
+      try
+      {
+       shortcut = (Shortcut)Enum.Parse(typeof(Shortcut), reader.ReadString());
+       AddShortcut(command, shortcut);
+       if(display)
+        _displayedShortcuts.Add(command, true);
+      }
+      catch(System.FormatException e)
+      {
+       Console.WriteLine(e.Message);
+      }
+     }
+    }
+    if(nodeType == XmlNodeType.EndElement && reader.Name == "shortcut")
+    {
+     return;
+    }
+   }
+   Debug.Assert(false, "Should never reach here");
+  }
+  public void AddKeyboardCombination(string command, Keys keys)
+  {
+   if(!_shortcuts.ContainsKey(command))
+   {
+    ArrayList combos = new ArrayList();
+    combos.Add(keys);
+    _shortcuts.Add(command, combos);
+    return;
+   }
+   ArrayList keyCombos = _shortcuts[command] as ArrayList;
+   for(int i = 0; i < keyCombos.Count; i++)
+   {
+    if((Keys)keyCombos[i] == Keys.None)
+     keyCombos.RemoveAt(i);
+   }
+   if(!keyCombos.Contains(keys) && keys != Keys.None || keyCombos.Count == 0)
+   {
+    ((ArrayList)_shortcuts[command]).Add(keys);
+   }
+  }
+  void AddShortcut(string command, Shortcut shortcut)
+  {
+   if(_shortcuts.ContainsKey(command))
+   {
+    throw new DuplicateShortcutSettingException("A shortcut \"" + _shortcuts[command] + "\"for the command \"" + command + "\" already exists.", command);
+   }
+   _shortcuts.Add(command, shortcut);
+  }
+  Keys ReadKeyCombination(XmlReader reader)
+  {
+   return (Keys)Enum.Parse(typeof(Keys), reader.ReadString());
+  }
+  public bool IsComplete
+  {
+   get
+   {
+    foreach(string command in AvailableMenuCommands)
+    {
+     if(!_shortcuts.ContainsKey(command))
+      return false;
+    }
+    foreach(string command in AvailableKeyComboCommands)
+    {
+     if(!_shortcuts.ContainsKey(command))
+      return false;
+    }
+    return true;
+   }
+  }
+  public string[] GetMissingShortcutCommands()
+  {
+   StringCollection missingCommands = new StringCollection();
+   foreach(string command in AvailableMenuCommands)
+   {
+    if(!_shortcuts.ContainsKey(command))
+     missingCommands.Add(command);
+   }
+   foreach(string command in AvailableKeyComboCommands)
+   {
+    if(!_shortcuts.ContainsKey(command))
+     missingCommands.Add(command);
+   }
+   string[] result = new string[missingCommands.Count];
+   missingCommands.CopyTo(result, 0);
+   return result;
+  }
+  public string[] AvailableMenuCommands
+  {
+   get
+   {
+    if(_availableMenuCommands == null)
+     _availableMenuCommands = new string[]
+     {
+      "cmdNewFeed",
+      "cmdNewCategory",
+      "cmdImportFeeds",
+      "cmdExportFeeds",
+      "cmdCloseExit",
+      "cmdToggleOfflineMode",
+      "cmdToggleTreeViewState",
+      "cmdToggleRssSearchTabState",
+      "cmdToggleMainTBViewState",
+      "cmdToggleWebTBViewState",
+      "cmdToggleWebSearchTBViewState",
+      "cmdRefreshFeeds",
+      "cmdAutoDiscoverFeed",
+      "cmdFeedItemPostReply",
+      "cmdUploadFeeds",
+      "cmdDownloadFeeds",
+      "cmdShowMainAppOptions",
+      "cmdUpdateCategory",
+      "cmdDeleteAll",
+      "cmdRenameCategory",
+      "cmdDeleteCategory",
+      "cmdUpdateFeed",
+      "cmdCatchUpCurrentSelectedNode",
+      "cmdRenameFeed",
+      "cmdDeleteFeed",
+      "cmdCopyFeed",
+      "cmdCopyFeedLinkToClipboard",
+      "cmdCopyFeedHomepageLinkToClipboard",
+      "cmdCopyFeedHomepageTitleLinkToClipboard",
+      "cmdShowFeedProperties",
+      "cmdHelpWebDoc",
+      "cmdWorkspaceNews",
+      "cmdReportBug",
+      "cmdAbout",
+      "cmdCheckForUpdates",
+      "cmdWikiNews",
+      "cmdVisitForum",
+      "cmdNavigateToFeedHome",
+      "cmdNavigateToFeedCosmos",
+      "cmdViewSourceOfFeed",
+      "cmdValidateFeed",
+      "cmdMarkFinderItemsRead",
+      "cmdNewFinder",
+      "cmdRenameFinder",
+      "cmdRefreshFinder",
+      "cmdDeleteFinder",
+      "cmdDeleteAllFinders",
+      "cmdShowFinderProperties",
+      "cmdMarkSelectedFeedItemsUnread",
+      "cmdMarkSelectedFeedItemsRead",
+      "cmdCopyNewsItem",
+      "cmdRestoreSelectedNewsItem",
+      "cmdFlagNewsItem",
+      "cmdWatchItemComments",
+      "cmdFlagNewsItemForFollowUp",
+      "cmdFlagNewsItemForReview",
+      "cmdFlagNewsItemForReply",
+      "cmdFlagNewsItemRead",
+      "cmdFlagNewsItemForward",
+      "cmdFlagNewsItemComplete",
+      "cmdFlagNewsItemNone",
+      "cmdCopyNewsItemLinkToClipboard",
+      "cmdCopyNewsItemTitleLinkToClipboard",
+      "cmdCopyNewsItemContentToClipboard",
+      "cmdDeleteSelectedNewsItems",
+      "cmdDeleteAllNewsItems",
+      "cmdDocTabCloseThis",
+      "cmdDocTabCloseAllOnStrip",
+      "cmdDocTabCloseAll",
+      "cmdDocTabLayoutHorizontal",
+      "cmdFeedDetailLayoutPosition",
+      "cmdFeedDetailLayoutPosTop",
+      "cmdFeedDetailLayoutPosLeft",
+      "cmdFeedDetailLayoutPosRight",
+      "cmdFeedDetailLayoutPosBottom",
+      "cmdShowGUI",
+      "cmdShowConfiguredAlertWindows",
+      "cmdShowAlertWindowNone",
+      "cmdShowAlertWindowConfiguredFeeds",
+      "cmdShowAlertWindowAll",
+      "cmdShowNewItemsReceivedBalloon",
+     };
+    return _availableMenuCommands;
+   }
+  }
+  public string[] AvailableKeyComboCommands
+  {
+   get
+   {
+    if(_availableComboCommands == null)
+     _availableComboCommands = new string[]
+     {
+      "ExpandListViewItem",
+      "CollapseListViewItem",
+      "RemoveDocTab",
+      "CatchUpCurrentSelectedNode",
+      "MarkFeedItemsUnread",
+      "MoveToNextUnread",
+      "InitiateRenameFeedOrCategory",
+      "UpdateFeed",
+      "GiveFocusToUrlTextBox",
+      "GiveFocusToSearchTextBox",
+      "DeleteItem",
+      "BrowserCreateNewTab",
+      "Help"
+     };
+    return _availableComboCommands;
+   }
+  }
+ }
+ [Serializable]
+ public class DuplicateShortcutSettingException : InvalidShortcutSettingsFileException
+ {
+  string _shortcutKey;
+  public DuplicateShortcutSettingException() : base()
+  {}
+  public DuplicateShortcutSettingException(string message) : base(message)
+  {}
+  public DuplicateShortcutSettingException(string message, string shortcutKey) : base(message)
+  {
+   _shortcutKey = shortcutKey;
+  }
+  public string ShortcutKey
+  {
+   get { return _shortcutKey; }
+  }
+ }
+ [Serializable]
+ public class InvalidShortcutSettingsFileException : Exception
+ {
+  public InvalidShortcutSettingsFileException() : base()
+  {}
+  public InvalidShortcutSettingsFileException(string message) : base(message)
+  {}
+  public InvalidShortcutSettingsFileException(string message, Exception innerException) : base(message, innerException)
+  {}
+  private InvalidShortcutSettingsFileException(SerializationInfo info, StreamingContext context) : base(info, context)
+  {}
+ }
+}

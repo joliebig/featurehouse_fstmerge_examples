@@ -1,0 +1,79 @@
+
+
+package edu.rice.cs.drjava.config;
+
+import java.io.StringWriter;
+import java.io.PrintWriter;
+import edu.rice.cs.util.swing.Utilities;
+
+
+public class Configuration {  
+  
+  
+  protected volatile OptionMap map;
+  
+  
+  protected volatile Exception _startupException;
+  
+  
+  public Configuration(OptionMap om) {
+    map = om;
+    _startupException = null;
+  }
+  
+  
+  public <T> T setSetting(final Option<T> op, final T value) {
+    T ret = map.setOption(op, value);
+
+    Utilities.invokeLater(new Runnable() { public void run() { op.notifyListeners(Configuration.this, value); } });
+    return ret;
+  }
+  
+  
+  public <T> T getSetting(Option<T> op) { return map.getOption(op); }
+  
+  
+  public <T> boolean isEditable(Option<T> op) { return true; }
+  
+  
+  public <T> void addOptionListener(Option<T> op, OptionListener<T> l) { op.addListener(this,l); }
+  
+  
+  public <T> void removeOptionListener(Option<T> op, OptionListener<T> l) { op.removeListener(this,l); }
+  
+  
+  public void resetToDefaults() { OptionMapLoader.DEFAULT.loadInto(map); }
+  
+  
+  public boolean hadStartupException() { return _startupException != null; }
+  
+  
+  public Exception getStartupException() { return _startupException; }
+  
+  
+  public void storeStartupException(Exception e) { _startupException = e; }
+  
+  
+  public String toString() {
+    StringWriter sw = new StringWriter();
+    PrintWriter w = new PrintWriter(sw);
+
+    
+    for (OptionParser<?> key : map.keys()) {
+      if (!key.getDefault().equals(map.getOption(key))) {
+        String tmpString = map.getString(key);
+        
+        
+        tmpString = tmpString.replaceAll("\\\\", "\\\\\\\\");
+        
+        w.println(key.getName()+" = "+tmpString);
+      }
+    }
+    w.close();
+    
+    return sw.toString();
+  }
+  
+  
+  public OptionMap getOptionMap() { return map; }
+}

@@ -1,0 +1,82 @@
+using System; 
+using System.Runtime.Serialization; 
+using System.Security.Permissions; namespace  Microsoft.ApplicationBlocks.ExceptionManagement {
+	
+ [Serializable] 
+ public class  CustomPublisherException  : BaseApplicationException {
+		
+  public  CustomPublisherException() : base()
+  {
+  }
+ 
+  public  CustomPublisherException(string message) : base(message)
+  {
+  }
+ 
+  public  CustomPublisherException(string message,Exception inner) : base(message, inner)
+  {
+  }
+ 
+  public  CustomPublisherException(string message, string assemblyName, string typeName, PublisherFormat publisherFormat) : base(message)
+  {
+   this.assemblyName = assemblyName;
+   this.typeName = typeName;
+   this.publisherFormat = publisherFormat;
+  }
+ 
+  public  CustomPublisherException(string message, string assemblyName, string typeName, PublisherFormat publisherFormat, Exception inner) : base(message, inner)
+  {
+   this.assemblyName = assemblyName;
+   this.typeName = typeName;
+   this.publisherFormat = publisherFormat;
+  }
+ 
+  protected  CustomPublisherException(SerializationInfo info, StreamingContext context) : base(info, context)
+  {
+   assemblyName = info.GetString("assemblyName");
+   typeName = info.GetString("typeName");
+   publisherFormat = (PublisherFormat)info.GetValue("publisherFormat",typeof(PublisherFormat));
+  }
+ 
+  private  string assemblyName;
+ 
+  private  string typeName;
+ 
+  private  PublisherFormat publisherFormat;
+ 
+  [SecurityPermission(SecurityAction.Demand, SerializationFormatter = true)] 
+  public override  void GetObjectData( SerializationInfo info, StreamingContext context )
+  {
+   info.AddValue("assemblyName", assemblyName, typeof(string));
+   info.AddValue("typeName", typeName, typeof(string));
+   info.AddValue("publisherFormat", publisherFormat, typeof(PublisherFormat));
+   base.GetObjectData(info,context);
+  }
+ 
+  public  PublisherFormat PublisherFormat
+  {
+   get
+   {
+    return publisherFormat;
+   }
+  }
+ 
+  public  string PublisherAssemblyName
+  {
+   get
+   {
+    return assemblyName;
+   }
+  }
+ 
+  public  string PublisherTypeName
+  {
+   get
+   {
+    return typeName;
+   }
+  }
+
+	}
+
+}

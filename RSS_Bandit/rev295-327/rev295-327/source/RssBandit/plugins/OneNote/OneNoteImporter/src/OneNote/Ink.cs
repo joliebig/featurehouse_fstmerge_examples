@@ -1,0 +1,130 @@
+using System; 
+using System.IO; 
+using System.Xml; namespace  Microsoft.Office.OneNote {
+	
+ [Serializable] 
+ public class  InkContent  : OutlineContent {
+		
+  public  InkContent(FileInfo file)
+  {
+   InkData = new FileData(file);
+  }
+ 
+  public  InkContent(byte[] isf)
+  {
+   InkData = new BinaryData(isf);
+  }
+ 
+  public  InkContent(InkContent clone)
+  {
+   InkData = clone.InkData;
+  }
+ 
+  public override  object Clone()
+  {
+   return new InkContent(this);
+  }
+ 
+  protected internal override  void SerializeToXml(XmlNode parentNode)
+  {
+   XmlDocument xmlDocument = parentNode.OwnerDocument;
+   XmlElement ink = xmlDocument.CreateElement("Ink");
+   parentNode.AppendChild(ink);
+   InkData.SerializeToXml(ink);
+  }
+ 
+  public  Data InkData
+  {
+   get
+   {
+    return (Data) GetChild("InkData");
+   }
+   set
+   {
+    if (value == null)
+     throw new ArgumentNullException("InkData");
+    if (!(value is FileData || value is BinaryData))
+     throw new ArgumentException("Incorrect data type.");
+    Data inkData = InkData;
+    if (inkData != null)
+     RemoveChild(inkData);
+    AddChild(value, "InkData");
+   }
+  }
+
+	}
+	
+ [Serializable] 
+ public class  InkObject  : PageObject {
+		
+  public  InkObject(FileInfo file)
+  {
+   Ink = new InkContent(file);
+  }
+ 
+  public  InkObject(byte[] isf)
+  {
+   Ink = new InkContent(isf);
+  }
+ 
+  public  InkObject(InkObject clone)
+  {
+   Width = clone.Width;
+   Height = clone.Height;
+   Position = clone.Position;
+   Ink = clone.Ink;
+  }
+ 
+  protected internal override  void SerializeObjectToXml(XmlNode parentNode)
+  {
+   Ink.SerializeToXml(parentNode);
+   if (Width != null || Height != null)
+   {
+    XmlElement ink = (XmlElement) parentNode.LastChild;
+    if (Width != null)
+     Width.SerializeToXml(ink);
+    if (Height != null)
+     Height.SerializeToXml(ink);
+   }
+  }
+ 
+  public override  object Clone()
+  {
+   return new InkObject(this);
+  }
+ 
+  private  InkContent Ink
+  {
+   get
+   {
+    return (InkContent) GetChild("Ink");
+   }
+   set
+   {
+    InkContent ink = Ink;
+    if (value == ink)
+     return;
+    if (ink != null)
+     RemoveChild(Ink);
+    AddChild(value, "Ink");
+   }
+  }
+ 
+  public  Data InkData
+  {
+   get
+   {
+    return Ink.InkData;
+   }
+   set
+   {
+    if (value == null)
+     throw new ArgumentNullException("InkData");
+    InkContent ink = Ink;
+    ink.InkData = value;
+   }
+  }
+
+	}
+
+}

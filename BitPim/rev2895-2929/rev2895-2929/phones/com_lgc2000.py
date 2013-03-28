@@ -1,0 +1,243 @@
+"""Communicate with the LG C2000 cell phone. This is crappy phone if you want to connect it to
+your PC, I would not recommend it.
+The serial interface is buggy, the phone crashes with the slightest reasons and sometimes this
+requires battery removal to fix . eg. AT+CPBS="LD" followed by AT+CPBR for call history retrieval.
+and refuses to accept file uploads although the commands are reported as supported.
+"""
+
+import base64
+
+import sha
+
+import time
+
+import bpcalendar
+
+import common
+
+import commport
+
+import com_gsm
+
+import com_lgg4015
+
+import guihelper
+
+import memo
+
+import nameparser
+
+import p_lgc2000
+
+import prototypes
+
+import sms
+
+class  Phone (com_lgg4015.Phone) :
+	""" Talk to the LG C2000 Phone"""
+	    desc='LG-C2000'
+	    protocolclass=p_lgc2000
+	    serialsname='lgc2000'
+	    def __init__(self, logtarget, commport):
+
+        com_gsm.Phone.__init__(self, logtarget, commport)
+
+        self.mode=self.MODENONE
+
+	def getfundamentals(self, results):
+
+        """Gets information fundamental to interoperating with the phone and UI.
+        Currently this is:
+          - 'uniqueserial'     a unique serial number representing the phone
+          - 'groups'           the phonebook groups
+        This method is called before we read the phonebook data or before we
+        write phonebook data.
+        """
+
+        self.setmode(self.MODEMODEM)
+
+        self.log("Retrieving fundamental phone information")
+
+        self.log("Reading phone serial number")
+
+        results['uniqueserial']=sha.new(self.get_sim_id()).hexdigest()
+
+        self.log("Reading group information")
+
+        results['groups']=self._get_groups()
+
+        self.log("Fundamentals retrieved")
+
+        return results
+
+	def getwallpapers(self, result):
+
+        self.log('Reading wallpaper index')
+
+        self.setmode(self.MODEMODEM)
+
+        self.charset_ascii()
+
+        self._wallpaper_mode()
+
+        media={}
+
+        media_index=self._get_wallpaper_index()
+
+        self.charset_ascii()
+
+        self._wallpaper_mode()
+
+        res={}
+
+        self._get_image_index(self.protocolclass.MIN_WALLPAPER_INDEX, self.protocolclass.MAX_WALLPAPER_INDEX,
+                         res, 0, 'wallpaper')
+
+        _dummy_data=file(guihelper.getresourcefile('wallpaper.png'),'rb').read()
+
+        for e in res.values():
+
+            media[e['name']]=_dummy_data
+
+        self.charset_ascii()
+
+        self._photo_mode()
+
+        res={}
+
+        self._get_image_index(self.protocolclass.MIN_PHOTO_INDEX, self.protocolclass.MAX_PHOTO_INDEX,
+                         res, 0, 'camera')
+
+        for e in res.values():
+
+            data=self._get_media_file(e['name'])
+
+            if data != False:
+
+                print "get OK"
+
+                media[e['name']]=data
+
+            else:
+
+                print "get failed"
+
+                media[e['name']]=_dummy_data
+
+        result['wallpapers']=media
+
+        result['wallpaper-index']=media_index
+
+        return result
+
+	def _photo_mode(self):
+
+        _req=self.protocolclass.media_selector_set()
+
+        _req.media_type=self.protocolclass.MEDIA_PHOTO
+
+        self.sendATcommand(_req, None)
+
+	def _get_image_index(self, min, max, res, res_offset, origin):
+
+        _req=self.protocolclass.media_list_req()
+
+        _req.start_index=min
+
+        _req.end_index=max
+
+        _res=self.sendATcommand(_req, self.protocolclass.media_list_resp)
+
+        for i,e in enumerate(_res):
+
+            res[i+res_offset]={ 'name': e.file_name, 'origin': origin, 'size':e.size }
+
+	def _get_wallpaper_index(self):
+
+        """ Return the wallpaper index"""
+
+        res={}
+
+        self.charset_ascii()
+
+        self._wallpaper_mode()
+
+        self._get_image_index(self.protocolclass.MIN_WALLPAPER_INDEX, self.protocolclass.MAX_WALLPAPER_INDEX,
+                         res, 0, 'wallpaper')
+
+        self.charset_ascii()
+
+        self._photo_mode()
+
+        self._get_image_index(self.protocolclass.MIN_PHOTO_INDEX, self.protocolclass.MAX_PHOTO_INDEX,
+                         res, self.protocolclass.MAX_WALLPAPER_INDEX, 'camera')
+
+        return res
+
+	def _get_media_file(self, file_name):
+
+        """ Read a media file
+        """
+
+        if not file_name:
+
+            return False
+
+        self.log('Writing media %s'%file_name)
+
+        _cmd='AT+DDLU=0,"%s"\r' % file_name
+
+        self.comm.write(str(_cmd))
+
+        self.comm.readuntil('>')
+
+        self.comm.read(1)
+
+        _data64=self.comm.readuntil('@')
+
+        data=base64.decodestring(_data64[:-1])
+
+        if self.comm.read(10)!='\n\r\r\n\r\nOK\r\n':
+
+            return False
+
+        return data
+
+	""" Talk to the LG C2000 Phone"""
+parent_profile=com_lgg4015.Profile
+class  Profile (parent_profile) :
+	serialsname=Phone.serialsname
+	    WALLPAPER_WIDTH=128
+	    WALLPAPER_HEIGHT=128
+	    MAX_WALLPAPER_BASENAME_LENGTH=19
+	    WALLPAPER_FILENAME_CHARS="abcdefghijklmnopqrstuvwxyz0123456789_ ."
+	    WALLPAPER_CONVERT_FORMAT="jpg"
+	    MAX_RINGTONE_BASENAME_LENGTH=19
+	    RINGTONE_FILENAME_CHARS="abcdefghijklmnopqrstuvwxyz0123456789_ ."
+	    RINGTONE_LIMITS= {
+        'MAXSIZE': 20480
+    }
+	    phone_manufacturer='LGE'
+	    phone_model='C2000'
+	    usbids=( ( 0x10AB, 0x10C5, 1),
+             ( 0x067b, 0x2303, None), 
+        )
+	    deviceclasses=("serial",)
+	    def __init__(self):
+
+        parent_profile.__init__(self)
+
+	_supportedsyncs=(
+        ('phonebook', 'read', None),  
+        ('phonebook', 'write', 'OVERWRITE'),  
+        ('calendar', 'read', None),   
+        ('calendar', 'write', 'OVERWRITE'),   
+        ('memo', 'read', None),     
+        ('memo', 'write', 'OVERWRITE'),  
+        ('sms', 'read', None),     
+        )
+	    def convertphonebooktophone(self, helper, data):
+
+        return data
+
+

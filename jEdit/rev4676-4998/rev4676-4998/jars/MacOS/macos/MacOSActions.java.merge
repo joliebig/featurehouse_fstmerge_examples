@@ -1,0 +1,90 @@
+package macos;
+
+
+import java.io.*;
+import javax.swing.*;
+import com.apple.cocoa.application.*;
+import org.gjt.sp.jedit.*;
+
+
+public class MacOSActions
+{
+	
+	public static void showInFinder(String path)
+	{
+		if (new File(path).exists())
+		{
+			
+			
+			NSWorkspace.sharedWorkspace().selectFile(path,path);
+		}
+	} 
+	
+	
+	public static void runScript(String path)
+	{
+<<<<<<< /work/joliebig/semistructured_merge/fse2011_artifact/fstmerge_tmp1307448714442/fstmerge_var1_5262878291982073877
+		
+		new ScriptRunner(path).start();
+		
+	} 
+	
+	
+	static class ScriptRunner extends Thread
+	{
+		private String path;
+		
+		public ScriptRunner(String path)
+=======
+		if (new File(path).exists())
+>>>>>>> /work/joliebig/semistructured_merge/fse2011_artifact/fstmerge_tmp1307448714442/fstmerge_var2_1352843389371538216
+		{
+			try {
+				String[] args = {"osascript",path};
+				Process proc = Runtime.getRuntime().exec(args);
+				BufferedReader r = new BufferedReader(
+					new InputStreamReader(proc.getErrorStream()));
+				proc.waitFor();
+				
+				String mesg = new String();
+				String line;
+				while ((line = r.readLine()) != null)
+				{
+					if (!line.startsWith("##"))
+						mesg += line;
+				}
+				r.close();
+				
+				if (proc.exitValue() != 0)
+					JOptionPane.showMessageDialog(null,mesg,
+						"Script Error",JOptionPane.ERROR_MESSAGE);
+			} catch (Exception ex) {}
+		}
+<<<<<<< /work/joliebig/semistructured_merge/fse2011_artifact/fstmerge_tmp1307448714442/fstmerge_var1_5262878291982073877
+		
+		public void run()
+		{
+			File file = new File(path);
+			
+			if (file.exists())
+			{
+				try {
+					BufferedReader reader = new BufferedReader(new FileReader(file));
+					StringBuffer code = new StringBuffer();
+					String line;
+					
+					while ((line = reader.readLine()) != null)
+						code.append(line);
+					
+					NSAppleScript script = new NSAppleScript(code.toString());
+					script.compile(new NSMutableDictionary());
+					script.execute(new NSMutableDictionary());
+				} catch (Exception ex) {}
+			}
+		}
+	} 
+=======
+	} 
+>>>>>>> /work/joliebig/semistructured_merge/fse2011_artifact/fstmerge_tmp1307448714442/fstmerge_var2_1352843389371538216
+}
+

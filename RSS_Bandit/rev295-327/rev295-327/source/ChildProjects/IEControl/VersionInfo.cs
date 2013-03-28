@@ -1,0 +1,3 @@
+using System.Reflection; 
+using System.Runtime.CompilerServices; 
+[assembly: AssemblyVersion("1.1.113.6327")]

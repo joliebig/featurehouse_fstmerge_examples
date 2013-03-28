@@ -1,0 +1,15 @@
+using System.Reflection;
+using System.Runtime.CompilerServices;
+[assembly: AssemblyTitle("NASA World Wind")]
+[assembly: AssemblyDescription("")]
+[assembly: AssemblyConfiguration("")]
+[assembly: AssemblyCompany("NASA")]
+[assembly: AssemblyProduct("World Wind")]
+[assembly: AssemblyCopyright("")]
+[assembly: AssemblyTrademark("")]
+[assembly: AssemblyCulture("")]
+[assembly: AssemblyVersion("1.4.0.0")]
+[assembly: AssemblyDelaySign(false)]
+[assembly: AssemblyKeyFile("")]
+[assembly: AssemblyKeyName("")]
+[assembly: System.Runtime.InteropServices.ComVisible(false)]

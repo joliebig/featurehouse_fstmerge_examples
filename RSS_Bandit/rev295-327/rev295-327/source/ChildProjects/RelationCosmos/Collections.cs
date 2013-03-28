@@ -1,0 +1,3065 @@
+using System; 
+using System.Collections; namespace  RelationCosmos.Collections {
+	
+ [Serializable] 
+public class  RelationHRefList  : ICollection, IList, IEnumerable, ICloneable {
+		
+        public interface  IRelationHRefListEnumerator {
+			
+            string Current {get;} 
+            bool MoveNext(); 
+            void Reset();
+		}
+		
+  private  const int DEFAULT_CAPACITY = 16; 
+  private  string[] m_array;
+ 
+  private  int m_count = 0;
+ 
+  [NonSerialized] 
+  private  int m_version = 0;
+ 
+        public static  RelationHRefList Synchronized(RelationHRefList list)
+        {
+            if(list==null)
+                throw new ArgumentNullException("list");
+            return new SyncRelationHRefList(list);
+        }
+ 
+        public static  RelationHRefList ReadOnly(RelationHRefList list)
+        {
+            if(list==null)
+                throw new ArgumentNullException("list");
+            return new ReadOnlyRelationHRefList(list);
+        }
+ 
+  public  RelationHRefList()
+  {
+   m_array = new string[DEFAULT_CAPACITY];
+  }
+ 
+  public  RelationHRefList(int capacity)
+  {
+   m_array = new string[capacity];
+  }
+ 
+  public  RelationHRefList(RelationHRefList c)
+  {
+   m_array = new string[c.Count];
+   AddRange(c);
+  }
+ 
+  public  RelationHRefList(System.Collections.ICollection c)
+  {
+   m_array = new string[c.Count];
+   AddRange(c);
+  }
+ 
+  public  RelationHRefList(string[] a)
+  {
+   m_array = new string[a.Length];
+   AddRange(a);
+  }
+ 
+        protected enum  Tag  {
+            Default
+        } 
+        protected  RelationHRefList(Tag t)
+        {
+            m_array = null;
+        }
+ 
+  public virtual  int Count
+  {
+   get { return m_count; }
+  }
+ 
+  public virtual  void CopyTo(string[] array)
+  {
+   this.CopyTo(array, 0);
+  }
+ 
+  public virtual  void CopyTo(string[] array, int start)
+  {
+   if (m_count > array.GetUpperBound(0) + 1 - start)
+    throw new System.ArgumentException("Destination array was not long enough.");
+   Array.Copy(m_array, 0, array, start, m_count);
+  }
+ 
+        public virtual  bool IsSynchronized
+        {
+            get { return m_array.IsSynchronized; }
+        }
+ 
+        public virtual  object SyncRoot
+        {
+            get { return m_array.SyncRoot; }
+        }
+ 
+  public virtual  string this[int index]
+  {
+   get
+   {
+    ValidateIndex(index);
+    return m_array[index];
+   }
+   set
+   {
+    ValidateIndex(index);
+    ++m_version;
+    m_array[index] = value;
+   }
+  }
+ 
+  public virtual  int Add(string item)
+  {
+   if (m_count == m_array.Length)
+    EnsureCapacity(m_count + 1);
+   m_array[m_count] = item;
+   m_version++;
+   return m_count++;
+  }
+ 
+  public virtual  void Clear()
+  {
+   ++m_version;
+   m_array = new string[DEFAULT_CAPACITY];
+   m_count = 0;
+  }
+ 
+  public virtual  object Clone()
+  {
+   RelationHRefList newColl = new RelationHRefList(m_count);
+   Array.Copy(m_array, 0, newColl.m_array, 0, m_count);
+   newColl.m_count = m_count;
+   newColl.m_version = m_version;
+   return newColl;
+  }
+ 
+  public virtual  bool Contains(string item)
+  {
+   for (int i=0; i != m_count; ++i)
+    if (m_array[i].Equals(item))
+     return true;
+   return false;
+  }
+ 
+  public virtual  int IndexOf(string item)
+  {
+   for (int i=0; i != m_count; ++i)
+    if (m_array[i].Equals(item))
+     return i;
+   return -1;
+  }
+ 
+  public virtual  void Insert(int index, string item)
+  {
+   ValidateIndex(index, true);
+   if (m_count == m_array.Length)
+    EnsureCapacity(m_count + 1);
+   if (index < m_count)
+   {
+    Array.Copy(m_array, index, m_array, index + 1, m_count - index);
+   }
+   m_array[index] = item;
+   m_count++;
+   m_version++;
+  }
+ 
+  public virtual  void Remove(string item)
+  {
+   int i = IndexOf(item);
+   if (i < 0)
+    throw new System.ArgumentException("Cannot remove the specified item because it was not found in the specified Collection.");
+   ++m_version;
+   RemoveAt(i);
+  }
+ 
+  public virtual  void RemoveAt(int index)
+  {
+   ValidateIndex(index);
+   m_count--;
+   if (index < m_count)
+   {
+    Array.Copy(m_array, index + 1, m_array, index, m_count - index);
+   }
+   string[] temp = new string[1];
+   Array.Copy(temp, 0, m_array, m_count, 1);
+   m_version++;
+  }
+ 
+        public virtual  bool IsFixedSize
+        {
+            get { return false; }
+        }
+ 
+        public virtual  bool IsReadOnly
+        {
+            get { return false; }
+        }
+ 
+  public virtual  IRelationHRefListEnumerator GetEnumerator()
+  {
+   return new Enumerator(this);
+  }
+ 
+  public virtual  int Capacity
+  {
+   get { return m_array.Length; }
+   set
+   {
+    if (value < m_count)
+     value = m_count;
+    if (value != m_array.Length)
+    {
+     if (value > 0)
+     {
+      string[] temp = new string[value];
+      Array.Copy(m_array, temp, m_count);
+      m_array = temp;
+     }
+     else
+     {
+      m_array = new string[DEFAULT_CAPACITY];
+     }
+    }
+   }
+  }
+ 
+  public virtual  int AddRange(RelationHRefList x)
+  {
+   if (m_count + x.Count >= m_array.Length)
+    EnsureCapacity(m_count + x.Count);
+   Array.Copy(x.m_array, 0, m_array, m_count, x.Count);
+   m_count += x.Count;
+   m_version++;
+   return m_count;
+  }
+ 
+  public virtual  int AddRange(System.Collections.ICollection c)
+  {
+   if (m_count + c.Count >= m_array.Length)
+    EnsureCapacity(m_count + c.Count);
+   c.CopyTo(m_array, m_count);
+   m_count += c.Count;
+   m_version++;
+   return m_count;
+  }
+ 
+  public virtual  int AddRange(string[] x)
+  {
+   if (m_count + x.Length >= m_array.Length)
+    EnsureCapacity(m_count + x.Length);
+   Array.Copy(x, 0, m_array, m_count, x.Length);
+   m_count += x.Length;
+   m_version++;
+   return m_count;
+  }
+ 
+  public virtual  void TrimToSize()
+  {
+   this.Capacity = m_count;
+  }
+ 
+  private  void ValidateIndex(int i)
+  {
+   ValidateIndex(i, false);
+  }
+ 
+  private  void ValidateIndex(int i, bool allowEqualEnd)
+  {
+   int max = (allowEqualEnd)?(m_count):(m_count-1);
+   if (i < 0 || i > max)
+    throw new System.ArgumentOutOfRangeException("Index was out of range.  Must be non-negative and less than the size of the collection.", (object)i, "Specified argument was out of the range of valid values.");
+  }
+ 
+  private  void EnsureCapacity(int min)
+  {
+   int newCapacity = ((m_array.Length == 0) ? DEFAULT_CAPACITY : m_array.Length * 2);
+   if (newCapacity < min)
+    newCapacity = min;
+   this.Capacity = newCapacity;
+  }
+ 
+  void ICollection.CopyTo(Array array, int start)
+  {
+   Array.Copy(m_array, 0, array, start, m_count);
+  }
+ 
+  object IList.this[int i]
+  {
+   get { return (object)this[i]; }
+   set { this[i] = (string)value; }
+  }
+ 
+  int IList.Add(object x)
+  {
+   return this.Add((string)x);
+  }
+ 
+     bool IList.Contains(object x)
+  {
+   return this.Contains((string)x);
+  }
+ 
+  int IList.IndexOf(object x)
+  {
+   return this.IndexOf((string)x);
+  }
+ 
+  void IList.Insert(int pos, object x)
+  {
+   this.Insert(pos, (string)x);
+  }
+ 
+  void IList.Remove(object x)
+  {
+   this.Remove((string)x);
+  }
+ 
+  void IList.RemoveAt(int pos)
+  {
+   this.RemoveAt(pos);
+  }
+ 
+  IEnumerator IEnumerable.GetEnumerator()
+  {
+   return (IEnumerator)(this.GetEnumerator());
+  }
+ 
+  private class  Enumerator  : IEnumerator, IRelationHRefListEnumerator {
+			
+   private  RelationHRefList m_collection;
+ 
+   private  int m_index;
+ 
+   private  int m_version;
+ 
+   internal  Enumerator(RelationHRefList tc)
+   {
+    m_collection = tc;
+    m_index = -1;
+    m_version = tc.m_version;
+   }
+ 
+   public  string Current
+   {
+    get { return m_collection[m_index]; }
+   }
+ 
+   public  bool MoveNext()
+   {
+    if (m_version != m_collection.m_version)
+     throw new System.InvalidOperationException("Collection was modified; enumeration operation may not execute.");
+    ++m_index;
+    return (m_index < m_collection.Count) ? true : false;
+   }
+ 
+   public  void Reset()
+   {
+    m_index = -1;
+   }
+ 
+   object IEnumerator.Current
+   {
+    get { return (object)(this.Current); }
+   }
+
+		}
+		
+        private class  SyncRelationHRefList  : RelationHRefList {
+			
+            private  RelationHRefList m_collection;
+ 
+            private  object m_root;
+ 
+            internal  SyncRelationHRefList(RelationHRefList list) : base(Tag.Default)
+            {
+                m_root = list.SyncRoot;
+                m_collection = list;
+            }
+ 
+            public override  void CopyTo(string[] array)
+            {
+                lock(this.m_root)
+                    m_collection.CopyTo(array);
+            }
+ 
+            public override  void CopyTo(string[] array, int start)
+            {
+                lock(this.m_root)
+                    m_collection.CopyTo(array,start);
+            }
+ 
+            public override  int Count
+            {
+                get
+                {
+                    lock(this.m_root)
+                        return m_collection.Count;
+                }
+            }
+ 
+            public override  bool IsSynchronized
+            {
+                get { return true; }
+            }
+ 
+            public override  object SyncRoot
+            {
+                get { return this.m_root; }
+            }
+ 
+            public override  string this[int i]
+            {
+                get
+                {
+                    lock(this.m_root)
+                        return m_collection[i];
+                }
+                set
+                {
+                    lock(this.m_root)
+                        m_collection[i] = value;
+                }
+            }
+ 
+            public override  int Add(string x)
+            {
+                lock(this.m_root)
+                    return m_collection.Add(x);
+            }
+ 
+            public override  void Clear()
+            {
+                lock(this.m_root)
+                    m_collection.Clear();
+            }
+ 
+            public override  bool Contains(string x)
+            {
+                lock(this.m_root)
+                    return m_collection.Contains(x);
+            }
+ 
+            public override  int IndexOf(string x)
+            {
+                lock(this.m_root)
+                    return m_collection.IndexOf(x);
+            }
+ 
+            public override  void Insert(int pos, string x)
+            {
+                lock(this.m_root)
+                    m_collection.Insert(pos,x);
+            }
+ 
+            public override  void Remove(string x)
+            {
+                lock(this.m_root)
+                    m_collection.Remove(x);
+            }
+ 
+            public override  void RemoveAt(int pos)
+            {
+                lock(this.m_root)
+                    m_collection.RemoveAt(pos);
+            }
+ 
+            public override  bool IsFixedSize
+            {
+                get {return m_collection.IsFixedSize;}
+            }
+ 
+            public override  bool IsReadOnly
+            {
+                get {return m_collection.IsReadOnly;}
+            }
+ 
+            public override  IRelationHRefListEnumerator GetEnumerator()
+            {
+                lock(m_root)
+                    return m_collection.GetEnumerator();
+            }
+ 
+            public override  int Capacity
+            {
+                get
+                {
+                    lock(this.m_root)
+                        return m_collection.Capacity;
+                }
+                set
+                {
+                    lock(this.m_root)
+                        m_collection.Capacity = value;
+                }
+            }
+ 
+            public override  int AddRange(RelationHRefList x)
+            {
+                lock(this.m_root)
+                    return m_collection.AddRange(x);
+            }
+ 
+            public override  int AddRange(System.Collections.ICollection c)
+            {
+                lock(this.m_root)
+                    return m_collection.AddRange(c);
+            }
+ 
+            public override  int AddRange(string[] x)
+            {
+                lock(this.m_root)
+                    return m_collection.AddRange(x);
+            }
+
+		}
+		
+        private class  ReadOnlyRelationHRefList  : RelationHRefList {
+			
+            private  RelationHRefList m_collection;
+ 
+            internal  ReadOnlyRelationHRefList(RelationHRefList list) : base(Tag.Default)
+            {
+                m_collection = list;
+            }
+ 
+            public override  void CopyTo(string[] array)
+            {
+                m_collection.CopyTo(array);
+            }
+ 
+            public override  void CopyTo(string[] array, int start)
+            {
+                m_collection.CopyTo(array,start);
+            }
+ 
+            public override  int Count
+            {
+                get {return m_collection.Count;}
+            }
+ 
+            public override  bool IsSynchronized
+            {
+                get { return m_collection.IsSynchronized; }
+            }
+ 
+            public override  object SyncRoot
+            {
+                get { return this.m_collection.SyncRoot; }
+            }
+ 
+            public override  string this[int i]
+            {
+                get { return m_collection[i]; }
+                set { throw new NotSupportedException("This is a Read Only Collection and can not be modified"); }
+            }
+ 
+            public override  int Add(string x)
+            {
+                throw new NotSupportedException("This is a Read Only Collection and can not be modified");
+            }
+ 
+            public override  void Clear()
+            {
+                throw new NotSupportedException("This is a Read Only Collection and can not be modified");
+            }
+ 
+            public override  bool Contains(string x)
+            {
+                return m_collection.Contains(x);
+            }
+ 
+            public override  int IndexOf(string x)
+            {
+                return m_collection.IndexOf(x);
+            }
+ 
+            public override  void Insert(int pos, string x)
+            {
+                throw new NotSupportedException("This is a Read Only Collection and can not be modified");
+            }
+ 
+            public override  void Remove(string x)
+            {
+                throw new NotSupportedException("This is a Read Only Collection and can not be modified");
+            }
+ 
+            public override  void RemoveAt(int pos)
+            {
+                throw new NotSupportedException("This is a Read Only Collection and can not be modified");
+            }
+ 
+            public override  bool IsFixedSize
+            {
+                get {return true;}
+            }
+ 
+            public override  bool IsReadOnly
+            {
+                get {return true;}
+            }
+ 
+            public override  IRelationHRefListEnumerator GetEnumerator()
+            {
+                return m_collection.GetEnumerator();
+            }
+ 
+            public override  int Capacity
+            {
+                get { return m_collection.Capacity; }
+                set { throw new NotSupportedException("This is a Read Only Collection and can not be modified"); }
+            }
+ 
+            public override  int AddRange(RelationHRefList x)
+            {
+                throw new NotSupportedException("This is a Read Only Collection and can not be modified");
+            }
+ 
+            public override  int AddRange(System.Collections.ICollection c)
+            {
+                throw new NotSupportedException("This is a Read Only Collection and can not be modified");
+            }
+ 
+            public override  int AddRange(string[] x)
+            {
+                throw new NotSupportedException("This is a Read Only Collection and can not be modified");
+            }
+
+		}
+
+	}
+
+}
+namespace  RelationCosmos.Collections {
+	
+ [Serializable] 
+public class  RelationList  : ICollection, IList, IEnumerable, ICloneable {
+		
+        public interface  IRelationListEnumerator {
+			
+            RelationBase Current {get;} 
+            bool MoveNext(); 
+            void Reset();
+		}
+		
+  private  const int DEFAULT_CAPACITY = 16; 
+  private  RelationBase[] m_array; 
+  private  int m_count = 0; 
+  [NonSerialized] 
+  private  int m_version = 0; 
+        public static  RelationList Synchronized(RelationList list)
+        {
+            if(list==null)
+                throw new ArgumentNullException("list");
+            return new SyncRelationList(list);
+        } 
+        public static  RelationList ReadOnly(RelationList list)
+        {
+            if(list==null)
+                throw new ArgumentNullException("list");
+            return new ReadOnlyRelationList(list);
+        } 
+  public  RelationList()
+  {
+   m_array = new RelationBase[DEFAULT_CAPACITY];
+  } 
+  public  RelationList(int capacity)
+  {
+   m_array = new RelationBase[capacity];
+  } 
+  public  RelationList(RelationList c)
+  {
+   m_array = new RelationBase[c.Count];
+   AddRange(c);
+  } 
+  public  RelationList(System.Collections.ICollection c)
+  {
+   m_array = new RelationBase[c.Count];
+   AddRange(c);
+  } 
+  public  RelationList(RelationBase[] a)
+  {
+   m_array = new RelationBase[a.Length];
+   AddRange(a);
+  } 
+        protected enum  Tag  {
+            Default
+        } 
+        protected  RelationList(Tag t)
+        {
+            m_array = null;
+        } 
+  public virtual  int Count
+  {
+   get { return m_count; }
+  } 
+  public virtual  void CopyTo(RelationBase[] array)
+  {
+   this.CopyTo(array, 0);
+  } 
+  public virtual  void CopyTo(RelationBase[] array, int start)
+  {
+   if (m_count > array.GetUpperBound(0) + 1 - start)
+    throw new System.ArgumentException("Destination array was not long enough.");
+   Array.Copy(m_array, 0, array, start, m_count);
+  } 
+        public virtual  bool IsSynchronized
+        {
+            get { return m_array.IsSynchronized; }
+        } 
+        public virtual  object SyncRoot
+        {
+            get { return m_array.SyncRoot; }
+        } 
+  public virtual  RelationBase this[int index]
+  {
+   get
+   {
+    ValidateIndex(index);
+    return m_array[index];
+   }
+   set
+   {
+    ValidateIndex(index);
+    ++m_version;
+    m_array[index] = value;
+   }
+  } 
+  public virtual  int Add(RelationBase item)
+  {
+   if (m_count == m_array.Length)
+    EnsureCapacity(m_count + 1);
+   m_array[m_count] = item;
+   m_version++;
+   return m_count++;
+  } 
+  public virtual  void Clear()
+  {
+   ++m_version;
+   m_array = new RelationBase[DEFAULT_CAPACITY];
+   m_count = 0;
+  } 
+  public virtual  object Clone()
+  {
+   RelationList newColl = new RelationList(m_count);
+   Array.Copy(m_array, 0, newColl.m_array, 0, m_count);
+   newColl.m_count = m_count;
+   newColl.m_version = m_version;
+   return newColl;
+  } 
+  public virtual  bool Contains(RelationBase item)
+  {
+   for (int i=0; i != m_count; ++i)
+    if (m_array[i].Equals(item))
+     return true;
+   return false;
+  } 
+  public virtual  int IndexOf(RelationBase item)
+  {
+   for (int i=0; i != m_count; ++i)
+    if (m_array[i].Equals(item))
+     return i;
+   return -1;
+  } 
+  public virtual  void Insert(int index, RelationBase item)
+  {
+   ValidateIndex(index, true);
+   if (m_count == m_array.Length)
+    EnsureCapacity(m_count + 1);
+   if (index < m_count)
+   {
+    Array.Copy(m_array, index, m_array, index + 1, m_count - index);
+   }
+   m_array[index] = item;
+   m_count++;
+   m_version++;
+  } 
+  public virtual  void Remove(RelationBase item)
+  {
+   int i = IndexOf(item);
+   if (i < 0)
+    throw new System.ArgumentException("Cannot remove the specified item because it was not found in the specified Collection.");
+   ++m_version;
+   RemoveAt(i);
+  } 
+  public virtual  void RemoveAt(int index)
+  {
+   ValidateIndex(index);
+   m_count--;
+   if (index < m_count)
+   {
+    Array.Copy(m_array, index + 1, m_array, index, m_count - index);
+   }
+   RelationBase[] temp = new RelationBase[1];
+   Array.Copy(temp, 0, m_array, m_count, 1);
+   m_version++;
+  } 
+        public virtual  bool IsFixedSize
+        {
+            get { return false; }
+        } 
+        public virtual  bool IsReadOnly
+        {
+            get { return false; }
+        } 
+  public virtual  IRelationListEnumerator GetEnumerator()
+  {
+   return new Enumerator(this);
+  } 
+  public virtual  int Capacity
+  {
+   get { return m_array.Length; }
+   set
+   {
+    if (value < m_count)
+     value = m_count;
+    if (value != m_array.Length)
+    {
+     if (value > 0)
+     {
+      RelationBase[] temp = new RelationBase[value];
+      Array.Copy(m_array, temp, m_count);
+      m_array = temp;
+     }
+     else
+     {
+      m_array = new RelationBase[DEFAULT_CAPACITY];
+     }
+    }
+   }
+  } 
+  public virtual  int AddRange(RelationList x)
+  {
+   if (m_count + x.Count >= m_array.Length)
+    EnsureCapacity(m_count + x.Count);
+   Array.Copy(x.m_array, 0, m_array, m_count, x.Count);
+   m_count += x.Count;
+   m_version++;
+   return m_count;
+  } 
+  public virtual  int AddRange(System.Collections.ICollection c)
+  {
+   if (m_count + c.Count >= m_array.Length)
+    EnsureCapacity(m_count + c.Count);
+   c.CopyTo(m_array, m_count);
+   m_count += c.Count;
+   m_version++;
+   return m_count;
+  } 
+  public virtual  int AddRange(RelationBase[] x)
+  {
+   if (m_count + x.Length >= m_array.Length)
+    EnsureCapacity(m_count + x.Length);
+   Array.Copy(x, 0, m_array, m_count, x.Length);
+   m_count += x.Length;
+   m_version++;
+   return m_count;
+  } 
+  public virtual  void TrimToSize()
+  {
+   this.Capacity = m_count;
+  } 
+  private  void ValidateIndex(int i)
+  {
+   ValidateIndex(i, false);
+  } 
+  private  void ValidateIndex(int i, bool allowEqualEnd)
+  {
+   int max = (allowEqualEnd)?(m_count):(m_count-1);
+   if (i < 0 || i > max)
+    throw new System.ArgumentOutOfRangeException("Index was out of range.  Must be non-negative and less than the size of the collection.", (object)i, "Specified argument was out of the range of valid values.");
+  } 
+  private  void EnsureCapacity(int min)
+  {
+   int newCapacity = ((m_array.Length == 0) ? DEFAULT_CAPACITY : m_array.Length * 2);
+   if (newCapacity < min)
+    newCapacity = min;
+   this.Capacity = newCapacity;
+  } 
+  void ICollection.CopyTo(Array array, int start)
+  {
+   Array.Copy(m_array, 0, array, start, m_count);
+  } 
+  object IList.this[int i]
+  {
+   get { return (object)this[i]; }
+   set { this[i] = (RelationBase)value; }
+  } 
+  int IList.Add(object x)
+  {
+   return this.Add((RelationBase)x);
+  } 
+     bool IList.Contains(object x)
+  {
+   return this.Contains((RelationBase)x);
+  } 
+  int IList.IndexOf(object x)
+  {
+   return this.IndexOf((RelationBase)x);
+  } 
+  void IList.Insert(int pos, object x)
+  {
+   this.Insert(pos, (RelationBase)x);
+  } 
+  void IList.Remove(object x)
+  {
+   this.Remove((RelationBase)x);
+  } 
+  void IList.RemoveAt(int pos)
+  {
+   this.RemoveAt(pos);
+  } 
+  IEnumerator IEnumerable.GetEnumerator()
+  {
+   return (IEnumerator)(this.GetEnumerator());
+  } 
+  private class  Enumerator  : IEnumerator, IRelationListEnumerator {
+			
+   private  RelationList m_collection; 
+   private  int m_index; 
+   private  int m_version; 
+   internal  Enumerator(RelationList tc)
+   {
+    m_collection = tc;
+    m_index = -1;
+    m_version = tc.m_version;
+   } 
+   public  RelationBase Current
+   {
+    get { return m_collection[m_index]; }
+   } 
+   public  bool MoveNext()
+   {
+    if (m_version != m_collection.m_version)
+     throw new System.InvalidOperationException("Collection was modified; enumeration operation may not execute.");
+    ++m_index;
+    return (m_index < m_collection.Count) ? true : false;
+   } 
+   public  void Reset()
+   {
+    m_index = -1;
+   } 
+   object IEnumerator.Current
+   {
+    get { return (object)(this.Current); }
+   }
+		}
+		
+        private class  SyncRelationList  : RelationList {
+			
+            private  RelationList m_collection; 
+            private  object m_root; 
+            internal  SyncRelationList(RelationList list) : base(Tag.Default)
+            {
+                m_root = list.SyncRoot;
+                m_collection = list;
+            } 
+            public override  void CopyTo(RelationBase[] array)
+            {
+                lock(this.m_root)
+                    m_collection.CopyTo(array);
+            } 
+            public override  void CopyTo(RelationBase[] array, int start)
+            {
+                lock(this.m_root)
+                    m_collection.CopyTo(array,start);
+            } 
+            public override  int Count
+            {
+                get
+                {
+                    lock(this.m_root)
+                        return m_collection.Count;
+                }
+            } 
+            public override  bool IsSynchronized
+            {
+                get { return true; }
+            } 
+            public override  object SyncRoot
+            {
+                get { return this.m_root; }
+            } 
+            public override  RelationBase this[int i]
+            {
+                get
+                {
+                    lock(this.m_root)
+                        return m_collection[i];
+                }
+                set
+                {
+                    lock(this.m_root)
+                        m_collection[i] = value;
+                }
+            } 
+            public override  int Add(RelationBase x)
+            {
+                lock(this.m_root)
+                    return m_collection.Add(x);
+            } 
+            public override  void Clear()
+            {
+                lock(this.m_root)
+                    m_collection.Clear();
+            } 
+            public override  bool Contains(RelationBase x)
+            {
+                lock(this.m_root)
+                    return m_collection.Contains(x);
+            } 
+            public override  int IndexOf(RelationBase x)
+            {
+                lock(this.m_root)
+                    return m_collection.IndexOf(x);
+            } 
+            public override  void Insert(int pos, RelationBase x)
+            {
+                lock(this.m_root)
+                    m_collection.Insert(pos,x);
+            } 
+            public override  void Remove(RelationBase x)
+            {
+                lock(this.m_root)
+                    m_collection.Remove(x);
+            } 
+            public override  void RemoveAt(int pos)
+            {
+                lock(this.m_root)
+                    m_collection.RemoveAt(pos);
+            } 
+            public override  bool IsFixedSize
+            {
+                get {return m_collection.IsFixedSize;}
+            } 
+            public override  bool IsReadOnly
+            {
+                get {return m_collection.IsReadOnly;}
+            } 
+            public override  IRelationListEnumerator GetEnumerator()
+            {
+                lock(m_root)
+                    return m_collection.GetEnumerator();
+            } 
+            public override  int Capacity
+            {
+                get
+                {
+                    lock(this.m_root)
+                        return m_collection.Capacity;
+                }
+                set
+                {
+                    lock(this.m_root)
+                        m_collection.Capacity = value;
+                }
+            } 
+            public override  int AddRange(RelationList x)
+            {
+                lock(this.m_root)
+                    return m_collection.AddRange(x);
+            } 
+            public override  int AddRange(System.Collections.ICollection c)
+            {
+                lock(this.m_root)
+                    return m_collection.AddRange(c);
+            } 
+            public override  int AddRange(RelationBase[] x)
+            {
+                lock(this.m_root)
+                    return m_collection.AddRange(x);
+            }
+		}
+		
+        private class  ReadOnlyRelationList  : RelationList {
+			
+            private  RelationList m_collection; 
+            internal  ReadOnlyRelationList(RelationList list) : base(Tag.Default)
+            {
+                m_collection = list;
+            } 
+            public override  void CopyTo(RelationBase[] array)
+            {
+                m_collection.CopyTo(array);
+            } 
+            public override  void CopyTo(RelationBase[] array, int start)
+            {
+                m_collection.CopyTo(array,start);
+            } 
+            public override  int Count
+            {
+                get {return m_collection.Count;}
+            } 
+            public override  bool IsSynchronized
+            {
+                get { return m_collection.IsSynchronized; }
+            } 
+            public override  object SyncRoot
+            {
+                get { return this.m_collection.SyncRoot; }
+            } 
+            public override  RelationBase this[int i]
+            {
+                get { return m_collection[i]; }
+                set { throw new NotSupportedException("This is a Read Only Collection and can not be modified"); }
+            } 
+            public override  int Add(RelationBase x)
+            {
+                throw new NotSupportedException("This is a Read Only Collection and can not be modified");
+            } 
+            public override  void Clear()
+            {
+                throw new NotSupportedException("This is a Read Only Collection and can not be modified");
+            } 
+            public override  bool Contains(RelationBase x)
+            {
+                return m_collection.Contains(x);
+            } 
+            public override  int IndexOf(RelationBase x)
+            {
+                return m_collection.IndexOf(x);
+            } 
+            public override  void Insert(int pos, RelationBase x)
+            {
+                throw new NotSupportedException("This is a Read Only Collection and can not be modified");
+            } 
+            public override  void Remove(RelationBase x)
+            {
+                throw new NotSupportedException("This is a Read Only Collection and can not be modified");
+            } 
+            public override  void RemoveAt(int pos)
+            {
+                throw new NotSupportedException("This is a Read Only Collection and can not be modified");
+            } 
+            public override  bool IsFixedSize
+            {
+                get {return true;}
+            } 
+            public override  bool IsReadOnly
+            {
+                get {return true;}
+            } 
+            public override  IRelationListEnumerator GetEnumerator()
+            {
+                return m_collection.GetEnumerator();
+            } 
+            public override  int Capacity
+            {
+                get { return m_collection.Capacity; }
+                set { throw new NotSupportedException("This is a Read Only Collection and can not be modified"); }
+            } 
+            public override  int AddRange(RelationList x)
+            {
+                throw new NotSupportedException("This is a Read Only Collection and can not be modified");
+            } 
+            public override  int AddRange(System.Collections.ICollection c)
+            {
+                throw new NotSupportedException("This is a Read Only Collection and can not be modified");
+            } 
+            public override  int AddRange(RelationBase[] x)
+            {
+                throw new NotSupportedException("This is a Read Only Collection and can not be modified");
+            }
+		}
+
+	}
+	
+  
+ class  RelationHRefList   {
+		
+         interface  IRelationHRefListEnumerator {
+			
+             
+             
+            
+		}
+		
+     
+     
+     
+   
+     
+           
+           
+     
+     
+     
+     
+     
+         enum  Tag  {
+            Default
+        } 
+           
+     
+     
+     
+           
+           
+     
+     
+     
+     
+     
+     
+     
+     
+     
+           
+           
+     
+     
+     
+     
+     
+     
+     
+     
+     
+   
+   
+   
+      
+   
+   
+   
+   
+   
+   class  Enumerator   {
+			
+      
+      
+      
+      
+      
+      
+      
+   
+		}
+		
+         class  SyncRelationHRefList   {
+			
+               
+               
+               
+               
+               
+               
+               
+               
+               
+               
+               
+               
+               
+               
+               
+               
+               
+               
+               
+               
+               
+               
+              
+		}
+		
+         class  ReadOnlyRelationHRefList   {
+			
+               
+               
+               
+               
+               
+               
+               
+               
+               
+               
+               
+               
+               
+               
+               
+               
+               
+               
+               
+               
+               
+              
+		}
+
+	}
+
+}
+namespace  RelationCosmos.Collections {
+	
+ public class  RelationLists  : IDictionary, ICollection, IEnumerable, ICloneable {
+		
+  protected  Hashtable innerHash; 
+  public  RelationLists()
+  {
+   innerHash = new Hashtable();
+  } 
+  public  RelationLists(RelationLists original)
+  {
+   innerHash = new Hashtable (original.innerHash);
+  } 
+  public  RelationLists(IDictionary dictionary)
+  {
+   innerHash = new Hashtable (dictionary);
+  } 
+  public  RelationLists(int capacity)
+  {
+   innerHash = new Hashtable(capacity);
+  } 
+  public  RelationLists(IDictionary dictionary, float loadFactor)
+  {
+   innerHash = new Hashtable(dictionary, loadFactor);
+  } 
+  public  RelationLists(IHashCodeProvider codeProvider, IComparer comparer)
+  {
+   innerHash = new Hashtable (codeProvider, comparer);
+  } 
+  public  RelationLists(int capacity, int loadFactor)
+  {
+   innerHash = new Hashtable(capacity, loadFactor);
+  } 
+  public  RelationLists(IDictionary dictionary, IHashCodeProvider codeProvider, IComparer comparer)
+  {
+   innerHash = new Hashtable (dictionary, codeProvider, comparer);
+  } 
+  public  RelationLists(int capacity, IHashCodeProvider codeProvider, IComparer comparer)
+  {
+   innerHash = new Hashtable (capacity, codeProvider, comparer);
+  } 
+  public  RelationLists(IDictionary dictionary, float loadFactor, IHashCodeProvider codeProvider, IComparer comparer)
+  {
+   innerHash = new Hashtable (dictionary, loadFactor, codeProvider, comparer);
+  } 
+  public  RelationLists(int capacity, float loadFactor, IHashCodeProvider codeProvider, IComparer comparer)
+  {
+   innerHash = new Hashtable (capacity, loadFactor, codeProvider, comparer);
+  } 
+        public  RelationListsEnumerator GetEnumerator()
+        {
+         return new RelationListsEnumerator(this);
+        } 
+  System.Collections.IDictionaryEnumerator IDictionary.GetEnumerator()
+  {
+   return new RelationListsEnumerator(this);
+  } 
+  IEnumerator IEnumerable.GetEnumerator()
+  {
+   return GetEnumerator();
+  } 
+  public  void Remove(string key)
+  {
+   innerHash.Remove (key);
+  } 
+  void IDictionary.Remove(object key)
+  {
+   Remove ((string)key);
+  } 
+  public  bool Contains(string key)
+  {
+   return innerHash.Contains(key);
+  } 
+  bool IDictionary.Contains(object key)
+  {
+   return Contains((string)key);
+  } 
+  public  void Clear()
+  {
+   innerHash.Clear();
+  } 
+  public  void Add(string key, RelationList value)
+  {
+   innerHash.Add (key, value);
+  } 
+  void IDictionary.Add(object key, object value)
+  {
+   Add ((string)key, (RelationList)value);
+  } 
+  public  bool IsReadOnly
+  {
+   get
+   {
+    return innerHash.IsReadOnly;
+   }
+  } 
+  public  RelationList this[string key]
+  {
+   get
+   {
+    return (RelationList) innerHash[key];
+   }
+   set
+   {
+    innerHash[key] = value;
+   }
+  } 
+  object IDictionary.this[object key]
+  {
+   get
+   {
+    return this[(string)key];
+   }
+   set
+   {
+    this[(string)key] = (RelationList)value;
+   }
+  } 
+  public  System.Collections.ICollection Values
+  {
+   get
+   {
+    return innerHash.Values;
+   }
+  } 
+  public  System.Collections.ICollection Keys
+  {
+   get
+   {
+    return innerHash.Keys;
+   }
+  } 
+  public  bool IsFixedSize
+  {
+   get
+   {
+    return innerHash.IsFixedSize;
+   }
+  } 
+  public  void CopyTo(System.Array array, int index)
+  {
+   innerHash.CopyTo (array, index);
+  } 
+  public  bool IsSynchronized
+  {
+   get
+   {
+    return innerHash.IsSynchronized;
+   }
+  } 
+  public  int Count
+  {
+   get
+   {
+    return innerHash.Count;
+   }
+  } 
+  public  object SyncRoot
+  {
+   get
+   {
+    return innerHash.SyncRoot;
+   }
+  } 
+  public  RelationLists Clone()
+  {
+   RelationLists clone = new RelationLists();
+   clone.innerHash = (Hashtable) innerHash.Clone();
+   return clone;
+  } 
+  object ICloneable.Clone()
+  {
+   return Clone();
+  } 
+  public  bool ContainsKey (string key)
+  {
+   return innerHash.ContainsKey(key);
+  } 
+  public  bool ContainsValue (RelationList value)
+  {
+   return innerHash.ContainsValue(value);
+  } 
+  public static  RelationLists Synchronized(RelationLists nonSync)
+  {
+   RelationLists sync = new RelationLists();
+   sync.innerHash = Hashtable.Synchronized(nonSync.innerHash);
+   return sync;
+  } 
+  internal  Hashtable InnerHash
+  {
+   get
+   {
+    return innerHash;
+   }
+  }
+	}
+	
+ public class  RelationListsEnumerator  : IDictionaryEnumerator {
+		
+  private  IDictionaryEnumerator innerEnumerator; 
+  internal  RelationListsEnumerator (RelationLists enumerable)
+  {
+   innerEnumerator = enumerable.InnerHash.GetEnumerator();
+  } 
+  public  string Key
+  {
+   get
+   {
+    return (string)innerEnumerator.Key;
+   }
+  } 
+  object IDictionaryEnumerator.Key
+   {
+    get
+    {
+     return Key;
+    }
+   } 
+  public  RelationList Value
+  {
+   get
+   {
+    return (RelationList)innerEnumerator.Value;
+   }
+  } 
+  object IDictionaryEnumerator.Value
+  {
+   get
+   {
+    return Value;
+   }
+  } 
+  public  System.Collections.DictionaryEntry Entry
+  {
+   get
+   {
+    return innerEnumerator.Entry;
+   }
+  } 
+  public  void Reset()
+  {
+   innerEnumerator.Reset();
+  } 
+  public  bool MoveNext()
+  {
+   return innerEnumerator.MoveNext();
+  } 
+  public  object Current
+  {
+   get
+   {
+    return innerEnumerator.Current;
+   }
+  }
+	}
+	
+  
+ class  RelationHRefList   {
+		
+         interface  IRelationHRefListEnumerator {
+			
+             
+             
+            
+		}
+		
+     
+     
+     
+   
+     
+           
+           
+     
+     
+     
+     
+     
+         enum  Tag  {
+            Default
+        } 
+           
+     
+     
+     
+           
+           
+     
+     
+     
+     
+     
+     
+     
+     
+     
+           
+           
+     
+     
+     
+     
+     
+     
+     
+     
+     
+   
+   
+   
+      
+   
+   
+   
+   
+   
+   class  Enumerator   {
+			
+      
+      
+      
+      
+      
+      
+      
+   
+		}
+		
+         class  SyncRelationHRefList   {
+			
+               
+               
+               
+               
+               
+               
+               
+               
+               
+               
+               
+               
+               
+               
+               
+               
+               
+               
+               
+               
+               
+               
+              
+		}
+		
+         class  ReadOnlyRelationHRefList   {
+			
+               
+               
+               
+               
+               
+               
+               
+               
+               
+               
+               
+               
+               
+               
+               
+               
+               
+               
+               
+               
+               
+              
+		}
+
+	}
+
+}
+namespace  RelationCosmos.Collections {
+	
+ public class  Relations  : IDictionary, ICollection, IEnumerable, ICloneable {
+		
+  protected  Hashtable innerHash; 
+  public  Relations()
+  {
+   innerHash = new Hashtable();
+  } 
+  public  Relations(Relations original)
+  {
+   innerHash = new Hashtable (original.innerHash);
+  } 
+  public  Relations(IDictionary dictionary)
+  {
+   innerHash = new Hashtable (dictionary);
+  } 
+  public  Relations(int capacity)
+  {
+   innerHash = new Hashtable(capacity);
+  } 
+  public  Relations(IDictionary dictionary, float loadFactor)
+  {
+   innerHash = new Hashtable(dictionary, loadFactor);
+  } 
+  public  Relations(IHashCodeProvider codeProvider, IComparer comparer)
+  {
+   innerHash = new Hashtable (codeProvider, comparer);
+  } 
+  public  Relations(int capacity, int loadFactor)
+  {
+   innerHash = new Hashtable(capacity, loadFactor);
+  } 
+  public  Relations(IDictionary dictionary, IHashCodeProvider codeProvider, IComparer comparer)
+  {
+   innerHash = new Hashtable (dictionary, codeProvider, comparer);
+  } 
+  public  Relations(int capacity, IHashCodeProvider codeProvider, IComparer comparer)
+  {
+   innerHash = new Hashtable (capacity, codeProvider, comparer);
+  } 
+  public  Relations(IDictionary dictionary, float loadFactor, IHashCodeProvider codeProvider, IComparer comparer)
+  {
+   innerHash = new Hashtable (dictionary, loadFactor, codeProvider, comparer);
+  } 
+  public  Relations(int capacity, float loadFactor, IHashCodeProvider codeProvider, IComparer comparer)
+  {
+   innerHash = new Hashtable (capacity, loadFactor, codeProvider, comparer);
+  } 
+        public  RelationsEnumerator GetEnumerator()
+        {
+         return new RelationsEnumerator(this);
+        } 
+  System.Collections.IDictionaryEnumerator IDictionary.GetEnumerator()
+  {
+   return new RelationsEnumerator(this);
+  } 
+  IEnumerator IEnumerable.GetEnumerator()
+  {
+   return GetEnumerator();
+  } 
+  public  void Remove(string key)
+  {
+   innerHash.Remove (key);
+  } 
+  void IDictionary.Remove(object key)
+  {
+   Remove ((string)key);
+  } 
+  public  bool Contains(string key)
+  {
+   return innerHash.Contains(key);
+  } 
+  bool IDictionary.Contains(object key)
+  {
+   return Contains((string)key);
+  } 
+  public  void Clear()
+  {
+   innerHash.Clear();
+  } 
+  public  void Add(string key, RelationBase value)
+  {
+   innerHash.Add (key, value);
+  } 
+  void IDictionary.Add(object key, object value)
+  {
+   Add ((string)key, (RelationBase)value);
+  } 
+  public  bool IsReadOnly
+  {
+   get
+   {
+    return innerHash.IsReadOnly;
+   }
+  } 
+  public  RelationBase this[string key]
+  {
+   get
+   {
+    return (RelationBase) innerHash[key];
+   }
+   set
+   {
+    innerHash[key] = value;
+   }
+  } 
+  object IDictionary.this[object key]
+  {
+   get
+   {
+    return this[(string)key];
+   }
+   set
+   {
+    this[(string)key] = (RelationBase)value;
+   }
+  } 
+  public  System.Collections.ICollection Values
+  {
+   get
+   {
+    return innerHash.Values;
+   }
+  } 
+  public  System.Collections.ICollection Keys
+  {
+   get
+   {
+    return innerHash.Keys;
+   }
+  } 
+  public  bool IsFixedSize
+  {
+   get
+   {
+    return innerHash.IsFixedSize;
+   }
+  } 
+  public  void CopyTo(System.Array array, int index)
+  {
+   innerHash.CopyTo (array, index);
+  } 
+  public  bool IsSynchronized
+  {
+   get
+   {
+    return innerHash.IsSynchronized;
+   }
+  } 
+  public  int Count
+  {
+   get
+   {
+    return innerHash.Count;
+   }
+  } 
+  public  object SyncRoot
+  {
+   get
+   {
+    return innerHash.SyncRoot;
+   }
+  } 
+  public  Relations Clone()
+  {
+   Relations clone = new Relations();
+   clone.innerHash = (Hashtable) innerHash.Clone();
+   return clone;
+  } 
+  object ICloneable.Clone()
+  {
+   return Clone();
+  } 
+  public  bool ContainsKey (string key)
+  {
+   return innerHash.ContainsKey(key);
+  } 
+  public  bool ContainsValue (RelationBase value)
+  {
+   return innerHash.ContainsValue(value);
+  } 
+  public static  Relations Synchronized(Relations nonSync)
+  {
+   Relations sync = new Relations();
+   sync.innerHash = Hashtable.Synchronized(nonSync.innerHash);
+   return sync;
+  } 
+  internal  Hashtable InnerHash
+  {
+   get
+   {
+    return innerHash;
+   }
+  }
+	}
+	
+ public class  RelationsEnumerator  : IDictionaryEnumerator {
+		
+  private  IDictionaryEnumerator innerEnumerator; 
+  internal  RelationsEnumerator (Relations enumerable)
+  {
+   innerEnumerator = enumerable.InnerHash.GetEnumerator();
+  } 
+  public  string Key
+  {
+   get
+   {
+    return (string)innerEnumerator.Key;
+   }
+  } 
+  object IDictionaryEnumerator.Key
+   {
+    get
+    {
+     return Key;
+    }
+   } 
+  public  RelationBase Value
+  {
+   get
+   {
+    return (RelationBase)innerEnumerator.Value;
+   }
+  } 
+  object IDictionaryEnumerator.Value
+  {
+   get
+   {
+    return Value;
+   }
+  } 
+  public  System.Collections.DictionaryEntry Entry
+  {
+   get
+   {
+    return innerEnumerator.Entry;
+   }
+  } 
+  public  void Reset()
+  {
+   innerEnumerator.Reset();
+  } 
+  public  bool MoveNext()
+  {
+   return innerEnumerator.MoveNext();
+  } 
+  public  object Current
+  {
+   get
+   {
+    return innerEnumerator.Current;
+   }
+  }
+	}
+	
+  
+ class  RelationHRefList   {
+		
+         interface  IRelationHRefListEnumerator {
+			
+             
+             
+            
+		}
+		
+     
+     
+     
+   
+     
+           
+           
+     
+     
+     
+     
+     
+         enum  Tag  {
+            Default
+        } 
+           
+     
+     
+     
+           
+           
+     
+     
+     
+     
+     
+     
+     
+     
+     
+           
+           
+     
+     
+     
+     
+     
+     
+     
+     
+     
+   
+   
+   
+      
+   
+   
+   
+   
+   
+   class  Enumerator   {
+			
+      
+      
+      
+      
+      
+      
+      
+   
+		}
+		
+         class  SyncRelationHRefList   {
+			
+               
+               
+               
+               
+               
+               
+               
+               
+               
+               
+               
+               
+               
+               
+               
+               
+               
+               
+               
+               
+               
+               
+              
+		}
+		
+         class  ReadOnlyRelationHRefList   {
+			
+               
+               
+               
+               
+               
+               
+               
+               
+               
+               
+               
+               
+               
+               
+               
+               
+               
+               
+               
+               
+               
+              
+		}
+
+	}
+
+}
+namespace  RelationCosmos.Collections {
+	
+ [Serializable] 
+public class  SortedRelations  : IDictionary, ICloneable {
+		
+  private  const int DEFAULT_CAPACITY = 16; 
+  private  RelationBase[] keys; 
+  private  bool[] values; 
+  private  int count; 
+  [NonSerialized] 
+  private  int version; 
+  private  IComparer comparer; 
+  private  KeyList keyList; 
+  private  ValueList valueList; 
+  public  SortedRelations()
+  {
+   keys = new RelationBase[DEFAULT_CAPACITY];
+   values = new bool[DEFAULT_CAPACITY];
+   comparer = Comparer.Default;
+  } 
+  public  SortedRelations(int capacity)
+  {
+   if (capacity < 0)
+    throw new ArgumentOutOfRangeException("capacity", capacity, "Initial capacity cannot be less than zero.");
+   keys = new RelationBase[capacity];
+   values = new bool[capacity];
+   comparer = Comparer.Default;
+  } 
+  public  SortedRelations(IComparer comparer) : this()
+  {
+   if (comparer != null)
+    this.comparer = comparer;
+  } 
+  public  SortedRelations(IComparer comparer, int capacity) : this(capacity)
+  {
+   if (comparer != null)
+    this.comparer = comparer;
+  } 
+  public  SortedRelations(IDictionary d) : this(d, null) {} 
+  public  SortedRelations(IDictionary d, IComparer comparer)
+   : this(comparer, (d == null ? 0 : d.Count))
+  {
+   if (d == null)
+    throw new ArgumentNullException("d", "The IDictionary cannot be null.");
+   d.Keys.CopyTo(keys, 0);
+   d.Values.CopyTo(values, 0);
+   Array.Sort(this.keys, this.values, this.comparer);
+   this.count = d.Count;
+  } 
+  object IDictionary.this[object key]
+  {
+   get
+   {
+    if (key == null)
+     throw new ArgumentNullException("key", "The key cannot be null.");
+    if (!(key is RelationBase))
+     throw new ArgumentException("The key must be of type: " + typeof(RelationBase).FullName, "key");
+    return this[(RelationBase)key];
+   }
+   set
+   {
+    if (key == null)
+     throw new ArgumentNullException("key", "The key cannot be null.");
+    if (!(key is RelationBase))
+     throw new ArgumentException("The key must be of type: " + typeof(RelationBase).FullName, "key");
+    if (!(value is bool))
+     throw new ArgumentException("The value must be of type: " + typeof(bool).FullName, "value");
+    this[(RelationBase)key] = (bool)value;
+   }
+  } 
+  public virtual  bool this[RelationBase key]
+  {
+   get
+   {
+    int index = IndexOfKey(key);
+    if (index >= 0)
+     return values[index];
+    throw new NullReferenceException("The specified key could not be found.");
+   }
+   set
+   {
+    if (Object.ReferenceEquals(key, null))
+     throw new ArgumentNullException("key", "The key cannot be null.");
+    int index = Array.BinarySearch(keys, 0, count, key, comparer);
+    if (index >= 0)
+    {
+     values[index] = value;
+     version++;
+     return;
+    }
+    Insert(~index, key, value);
+   }
+  } 
+  public virtual  int Capacity
+  {
+   get
+   {
+    return keys.Length;
+   }
+   set
+   {
+    if (value < count)
+     value = count;
+    if (value != keys.Length)
+    {
+     if (value > 0)
+     {
+      RelationBase[] newKeys = new RelationBase[value];
+      bool[] newValues = new bool[value];
+      if (count > 0)
+      {
+       Array.Copy(keys, 0, newKeys, 0, count);
+       Array.Copy(values, 0, newValues, 0, count);
+      }
+      keys = newKeys;
+      values = newValues;
+     }
+     else
+     {
+      keys = new RelationBase[DEFAULT_CAPACITY];
+      values = new bool[DEFAULT_CAPACITY];
+     }
+    }
+   }
+  } 
+  public virtual  int Count
+  {
+   get
+   {
+    return this.count;
+   }
+  } 
+  public virtual  bool IsFixedSize
+  {
+   get { return false; }
+  } 
+  public virtual  bool IsReadOnly
+  {
+   get { return false; }
+  } 
+  public virtual  bool IsSynchronized
+  {
+   get { return false; }
+  } 
+  public virtual  ICollection Keys
+  {
+   get
+   {
+    return GetKeyList();
+   }
+  } 
+  public virtual  object SyncRoot
+  {
+   get { return this; }
+  } 
+  public virtual  ICollection Values
+  {
+   get
+   {
+    return GetValueList();
+   }
+  } 
+  void IDictionary.Add(object key, object value)
+  {
+   if (key == null)
+    throw new ArgumentNullException("key", "The key cannot be null.");
+   if (!(key is RelationBase))
+    throw new ArgumentException("The key must be of type: " + typeof(RelationBase).FullName, "key");
+   if (!(value is bool))
+    throw new ArgumentException("The value must be of type: " + typeof(bool).FullName, "value");
+   this.Add((RelationBase)key, (bool)value);
+  } 
+  public virtual  void Add(RelationBase key, bool value)
+  {
+   if (Object.ReferenceEquals(key, null))
+    throw new ArgumentNullException("key", "The key cannot be null.");
+   int index = Array.BinarySearch(keys, 0, count, key, comparer);
+   if (index >= 0)
+    throw new ArgumentException(String.Format("Item has already been added.  Key being added: \"{0}\".", key));
+   Insert(~index, key, value);
+  } 
+  public virtual  void Clear()
+  {
+   keys = new RelationBase[DEFAULT_CAPACITY];
+   values = new bool[DEFAULT_CAPACITY];
+   count = 0;
+   version++;
+  } 
+  public virtual  object Clone()
+  {
+   SortedRelations newList = new SortedRelations(count);
+   Array.Copy(keys, 0, newList.keys, 0, count);
+   Array.Copy(values, 0, newList.values, 0, count);
+   newList.count = count;
+   newList.version = version;
+   newList.comparer = comparer;
+   return newList;
+  } 
+  bool IDictionary.Contains(object key)
+  {
+   if (key == null)
+    throw new ArgumentNullException("key", "The key cannot be null.");
+   if (!(key is RelationBase))
+    throw new ArgumentException("The key must be of type: " + typeof(RelationBase).FullName, "key");
+   return (IndexOfKey((RelationBase)key) >= 0);
+  } 
+  public virtual  bool Contains(RelationBase key)
+  {
+   return (IndexOfKey(key) >= 0);
+  } 
+  public virtual  bool ContainsKey(RelationBase key)
+  {
+   return (IndexOfKey(key) >= 0);
+  } 
+  public virtual  bool ContainsValue(bool value)
+  {
+   return (IndexOfValue(value) >= 0);
+  } 
+  public virtual  void CopyTo(Array array, int arrayIndex)
+  {
+   if (array == null)
+    throw new ArgumentNullException("array", "The destination array cannot be null.");
+   if (arrayIndex < 0)
+    throw new ArgumentOutOfRangeException("arrayIndex", "Destination index cannot be less than zero.");
+   if (array.Rank != 1)
+    throw new ArgumentException("Multidimensional arrays are not supported.", "array");
+   if (arrayIndex >= array.Length)
+    throw new ArgumentException("Destination index cannot be greater than the size of the destination array.", "arrayIndex");
+   if (count > (array.Length - arrayIndex))
+    throw new ArgumentException("Not enough available space in the destination array.");
+   for (int i=0; i < count; i++)
+   {
+    DictionaryEntry entry = new DictionaryEntry(keys[i], values[i]);
+    array.SetValue(entry, arrayIndex + i);
+   }
+  } 
+  public virtual  bool GetByIndex(int index)
+  {
+   if (index < 0 || index >= count)
+    throw new ArgumentOutOfRangeException("index", index, "The index is outside the range of valid indices.");
+   return values[index];
+  } 
+  IEnumerator IEnumerable.GetEnumerator()
+  {
+   return new SortedListEnumerator(this, 0, count, SortedListEnumerator.DictEntry);
+  } 
+  public virtual  IDictionaryEnumerator GetEnumerator()
+  {
+   return new SortedListEnumerator(this, 0, count, SortedListEnumerator.DictEntry);
+  } 
+  public virtual  RelationBase GetKey(int index)
+  {
+   if (index < 0 || index >= count)
+    throw new ArgumentOutOfRangeException("index", index, "The index is outside the range of valid indices.");
+   return keys[index];
+  } 
+  public virtual  IList GetKeyList()
+  {
+   if (keyList == null)
+    keyList = new KeyList(this);
+   return keyList;
+  } 
+  public virtual  IList GetValueList()
+  {
+   if (valueList == null)
+    valueList = new ValueList(this);
+   return valueList;
+  } 
+  public virtual  int IndexOfKey(RelationBase key)
+  {
+   if (Object.ReferenceEquals(key, null))
+    throw new ArgumentNullException("key", "The key cannot be null.");
+   int index = Array.BinarySearch(keys, 0, count, key, comparer);
+   return (index >= 0 ? index : -1);
+  } 
+  public virtual  int IndexOfValue(bool value)
+  {
+   return Array.IndexOf(values, value, 0, count);
+  } 
+  void IDictionary.Remove(object key)
+  {
+   if (key == null)
+    throw new ArgumentNullException("key", "The key cannot be null.");
+   if (!(key is RelationBase))
+    throw new ArgumentException("The key must be of type: " + typeof(RelationBase).FullName, "key");
+   Remove((RelationBase)key);
+  } 
+  public virtual  void Remove(RelationBase key)
+  {
+   if (Object.ReferenceEquals(key, null))
+    throw new ArgumentNullException("key", "The key cannot be null.");
+   int index = IndexOfKey(key);
+   if (index >= 0)
+    RemoveAt(index);
+  } 
+  public virtual  void RemoveAt(int index)
+  {
+   if (index < 0 || index >= count)
+    throw new ArgumentOutOfRangeException("index", index, "The index is outside the range of valid indices.");
+   count--;
+   if (index < count)
+   {
+    Array.Copy(keys, index + 1, keys, index, count - index);
+    Array.Copy(values, index + 1, values, index, count - index);
+   }
+   RelationBase[] tempKey = new RelationBase[1];
+   bool[] tempVal = new bool[1];
+   Array.Copy(tempKey, 0, keys, count, 1);
+   Array.Copy(tempVal, 0, values, count, 1);
+   version++;
+  } 
+  public virtual  void SetByIndex(int index, bool value)
+  {
+   if (index < 0 || index >= count)
+    throw new ArgumentOutOfRangeException("index", index, "The index is outside the range of valid indices.");
+   values[index] = value;
+   version++;
+  } 
+  public static  SortedRelations Synchronized(SortedRelations list)
+  {
+   if (list == null)
+    throw new ArgumentNullException("list", "The list cannot be null.");
+   return new SyncSortedList(list);
+  } 
+  public virtual  void TrimToSize()
+  {
+   this.Capacity = count;
+  } 
+  private  void Insert(int index, RelationBase key, bool value)
+  {
+   if (count == keys.Length)
+    EnsureCapacity(count + 1);
+   if (index < count)
+   {
+    Array.Copy(keys, index, keys, index + 1, count - index);
+    Array.Copy(values, index, values, index + 1, count - index);
+   }
+   keys[index] = key;
+   values[index] = value;
+   count++;
+   version++;
+  } 
+  private  void EnsureCapacity(int min)
+  {
+   int newCapacity = ((keys.Length == 0) ? DEFAULT_CAPACITY : keys.Length * 2);
+   if (newCapacity < min)
+    newCapacity = min;
+   this.Capacity = newCapacity;
+  } 
+  [Serializable] 
+  private class  SyncSortedList  : SortedRelations, IDictionary {
+			
+   private  SortedRelations list; 
+   private  object root; 
+   internal  SyncSortedList(SortedRelations list)
+   {
+    this.list = list;
+    this.root = list.SyncRoot;
+   } 
+   public override  int Capacity
+   {
+    get
+    {
+     lock (root)
+      return list.Capacity;
+    }
+   } 
+   public override  int Count
+   {
+    get
+    {
+     lock (root)
+      return list.Count;
+    }
+   } 
+   public override  bool IsFixedSize
+   {
+    get
+    {
+     return list.IsFixedSize;
+    }
+   } 
+   public override  bool IsReadOnly
+   {
+    get
+    {
+     return list.IsReadOnly;
+    }
+   } 
+   public override  bool IsSynchronized
+   {
+    get
+    {
+     return true;
+    }
+   } 
+   public override  object SyncRoot
+   {
+    get
+    {
+     return root;
+    }
+   } 
+   object IDictionary.this[object key]
+   {
+    get
+    {
+     lock (root)
+      return ((IDictionary)list)[key];
+    }
+    set
+    {
+     lock (root)
+      ((IDictionary)list)[key] = value;
+    }
+   } 
+   public override  bool this[RelationBase key]
+   {
+    get
+    {
+     lock (root)
+      return list[key];
+    }
+    set
+    {
+     lock (root)
+      list[key] = value;
+    }
+   } 
+   void IDictionary.Add(object key, object value)
+   {
+    lock (root)
+     ((IDictionary)list).Add(key, value);
+   } 
+   public override  void Add(RelationBase key, bool value)
+   {
+    lock (root)
+     list.Add(key, value);
+   } 
+   public override  void Clear()
+   {
+    lock (root)
+     list.Clear();
+   } 
+   public override  object Clone()
+   {
+    lock (root)
+     return list.Clone();
+   } 
+   bool IDictionary.Contains(object key)
+   {
+    lock (root)
+     return ((IDictionary)list).Contains(key);
+   } 
+   public override  bool Contains(RelationBase key)
+   {
+    lock (root)
+     return list.Contains(key);
+   } 
+   public override  bool ContainsKey(RelationBase key)
+   {
+    lock (root)
+     return list.ContainsKey(key);
+   } 
+   public override  bool ContainsValue(bool value)
+   {
+    lock (root)
+     return list.ContainsValue(value);
+   } 
+   public override  void CopyTo(Array array, int index)
+   {
+    lock (root)
+     list.CopyTo(array, index);
+   } 
+   public override  bool GetByIndex(int index)
+   {
+    lock (root)
+     return list.GetByIndex(index);
+   } 
+   public override  IDictionaryEnumerator GetEnumerator()
+   {
+    lock (root)
+     return list.GetEnumerator();
+   } 
+   public override  RelationBase GetKey(int index)
+   {
+    lock (root)
+     return list.GetKey(index);
+   } 
+   public override  IList GetKeyList()
+   {
+    lock (root)
+     return list.GetKeyList();
+   } 
+   public override  IList GetValueList()
+   {
+    lock (root)
+     return list.GetValueList();
+   } 
+   public override  int IndexOfKey(RelationBase key)
+   {
+    lock (root)
+     return list.IndexOfKey(key);
+   } 
+   public override  int IndexOfValue(bool value)
+   {
+    lock (root)
+     return list.IndexOfValue(value);
+   } 
+   void IDictionary.Remove(object key)
+   {
+    lock (root)
+     ((IDictionary)list).Remove(key);
+   } 
+   public override  void Remove(RelationBase key)
+   {
+    lock (root)
+     list.Remove(key);
+   } 
+   public override  void RemoveAt(int index)
+   {
+    lock (root)
+     list.RemoveAt(index);
+   } 
+   public override  void SetByIndex(int index, bool value)
+   {
+    lock (root)
+     list.SetByIndex(index, value);
+   } 
+   public override  void TrimToSize()
+   {
+    lock (root)
+     list.TrimToSize();
+   }
+		}
+		
+  [Serializable] 
+  private class  SortedListEnumerator  : IDictionaryEnumerator, ICloneable {
+			
+   private  SortedRelations list; 
+   private  RelationBase key; 
+   private  bool value; 
+   private  int index; 
+   private  int startIndex; 
+   private  int endIndex; 
+   private  int version; 
+   private  bool currentValid; 
+   private  int returnType; 
+   internal  const int Keys = 1; 
+   internal  const int Values = 2; 
+   internal  const int DictEntry = 3; 
+   internal  SortedListEnumerator(SortedRelations list, int index, int count, int returnType)
+   {
+    this.list = list;
+    this.index = index;
+    this.startIndex = index;
+    this.endIndex = index + count;
+    this.version = list.version;
+    this.returnType = returnType;
+    this.currentValid = false;
+   } 
+   public  object Clone()
+   {
+    return this.MemberwiseClone();
+   } 
+   object IDictionaryEnumerator.Key
+   {
+    get
+    {
+     CheckState();
+     return key;
+    }
+   } 
+   public virtual  RelationBase Key
+   {
+    get
+    {
+     CheckState();
+     return key;
+    }
+   } 
+   public virtual  DictionaryEntry Entry
+   {
+    get
+    {
+     CheckState();
+     return new DictionaryEntry(key, value);
+    }
+   } 
+   public virtual  object Current
+   {
+    get
+    {
+     CheckState();
+     switch (returnType)
+     {
+      case Keys:
+       return key;
+      case Values:
+       return value;
+      case DictEntry:
+      default:
+       return new DictionaryEntry(key, value);
+     }
+    }
+   } 
+   object IDictionaryEnumerator.Value
+   {
+    get
+    {
+     CheckState();
+     return value;
+    }
+   } 
+   public virtual  bool Value
+   {
+    get
+    {
+     CheckState();
+     return value;
+    }
+   } 
+   public virtual  bool MoveNext()
+   {
+    if (version != list.version)
+     throw new InvalidOperationException("The collection was modified - enumeration cannot continue.");
+    if (index < endIndex)
+    {
+     key = list.keys[index];
+     value = list.values[index];
+     index++;
+     currentValid = true;
+     return true;
+    }
+    RelationBase[] tempKey = new RelationBase[1];
+    bool[] tempVal = new bool[1];
+    key = tempKey[0];
+    value = tempVal[0];
+    currentValid = false;
+    return false;
+   } 
+   public virtual  void Reset()
+   {
+    if (version != list.version)
+     throw new InvalidOperationException("The collection was modified - enumeration cannot continue.");
+    RelationBase[] tempKey = new RelationBase[1];
+    bool[] tempVal = new bool[1];
+    key = tempKey[0];
+    value = tempVal[0];
+    currentValid = false;
+    index = startIndex;
+   } 
+   private  void CheckState()
+   {
+    if (version != list.version)
+     throw new InvalidOperationException("The collection was modified - enumeration cannot continue.");
+    if (!currentValid)
+     throw new InvalidOperationException("Enumeration either has not started or has already finished.");
+   }
+		}
+		
+  [Serializable] 
+  private class  KeyList  : IList {
+			
+   private  SortedRelations list; 
+   internal  KeyList(SortedRelations list)
+   {
+    this.list = list;
+   } 
+   public virtual  int Count
+   {
+    get
+    {
+     return list.Count;
+    }
+   } 
+   public virtual  bool IsReadOnly
+   {
+    get { return true; }
+   } 
+   public virtual  bool IsFixedSize
+   {
+    get { return true; }
+   } 
+   public virtual  bool IsSynchronized
+   {
+    get { return list.IsSynchronized; }
+   } 
+   public virtual  object SyncRoot
+   {
+    get { return list.SyncRoot; }
+   } 
+   public virtual  int Add(object key)
+   {
+    throw new NotSupportedException("Cannot add to a read-only list.");
+   } 
+   public virtual  void Clear()
+   {
+    throw new NotSupportedException("Cannot clear a read-only list.");
+   } 
+   bool IList.Contains(object key)
+   {
+    return ((IDictionary)list).Contains(key);
+   } 
+   public virtual  bool Contains(RelationBase key)
+   {
+    return list.Contains(key);
+   } 
+   public virtual  void CopyTo(Array array, int index)
+   {
+    if (array != null && array.Rank != 1)
+     throw new ArgumentException("Multidimensional arrays are not supported.", "array");
+    Array.Copy(list.keys, 0, array, index, list.Count);
+   } 
+   public virtual  void Insert(int index, object value)
+   {
+    throw new NotSupportedException("Cannot insert into a read-only list.");
+   } 
+   object IList.this[int index]
+   {
+    get
+    {
+     return list.GetKey(index);
+    }
+    set
+    {
+     throw new NotSupportedException("Cannot modify a read-only list.");
+    }
+   } 
+   public virtual  RelationBase this[int index]
+   {
+    get
+    {
+     return list.GetKey(index);
+    }
+    set
+    {
+     throw new NotSupportedException("Cannot modify a read-only list.");
+    }
+   } 
+   public virtual  IEnumerator GetEnumerator()
+   {
+    return new SortedListEnumerator(list, 0, list.Count, SortedListEnumerator.Keys);
+   } 
+   int IList.IndexOf(object key)
+   {
+    if (!(key is RelationBase))
+     throw new ArgumentException("The key must be of type: " + typeof(RelationBase).FullName, "key");
+    return list.IndexOfKey((RelationBase)key);
+   } 
+   public virtual  int IndexOf(RelationBase key)
+   {
+    return list.IndexOfKey(key);
+   } 
+   public virtual  void Remove(object key)
+   {
+    throw new NotSupportedException("Cannot modify a read-only list.");
+   } 
+   public virtual  void RemoveAt(int index)
+   {
+    throw new NotSupportedException("Cannot modify a read-only list.");
+   }
+		}
+		
+  [Serializable] 
+  private class  ValueList  : IList {
+			
+   private  SortedRelations list; 
+   internal  ValueList(SortedRelations list)
+   {
+    this.list = list;
+   } 
+   public virtual  int Count
+   {
+    get
+    {
+     return list.Count;
+    }
+   } 
+   public virtual  bool IsReadOnly
+   {
+    get { return true; }
+   } 
+   public virtual  bool IsFixedSize
+   {
+    get { return true; }
+   } 
+   public virtual  bool IsSynchronized
+   {
+    get { return list.IsSynchronized; }
+   } 
+   public virtual  object SyncRoot
+   {
+    get { return list.SyncRoot; }
+   } 
+   public virtual  int Add(object key)
+   {
+    throw new NotSupportedException("Cannot add to a read-only list.");
+   } 
+   public virtual  void Clear()
+   {
+    throw new NotSupportedException("Cannot clear a read-only list.");
+   } 
+   bool IList.Contains(object value)
+   {
+    if (!(value is bool))
+     throw new ArgumentException("The value must be of type: " + typeof(bool).FullName, "value");
+    return list.ContainsValue((bool)value);
+   } 
+   public virtual  bool Contains(bool value)
+   {
+    return list.ContainsValue(value);
+   } 
+   public virtual  void CopyTo(Array array, int index)
+   {
+    if (array != null && array.Rank != 1)
+     throw new ArgumentException("Multidimensional arrays are not supported.", "array");
+    Array.Copy(list.values, 0, array, index, list.Count);
+   } 
+   public virtual  void Insert(int index, object value)
+   {
+    throw new NotSupportedException("Cannot insert into a read-only list.");
+   } 
+   object IList.this[int index]
+   {
+    get
+    {
+     return list.GetByIndex(index);
+    }
+    set
+    {
+     if (!(value is bool))
+      throw new ArgumentException("The value must be of type: " + typeof(bool).FullName, "value");
+     list.SetByIndex(index, (bool)value);
+    }
+   } 
+   public virtual  bool this[int index]
+   {
+    get
+    {
+     return list.GetByIndex(index);
+    }
+    set
+    {
+     list.SetByIndex(index, value);
+    }
+   } 
+   public virtual  IEnumerator GetEnumerator()
+   {
+    return new SortedListEnumerator(list, 0, list.Count, SortedListEnumerator.Values);
+   } 
+   int IList.IndexOf(object value)
+   {
+    if (!(value is bool))
+     throw new ArgumentException("The value must be of type: " + typeof(bool).FullName, "value");
+    return list.IndexOfValue((bool)value);
+   } 
+   public virtual  int IndexOf(bool value)
+   {
+    return list.IndexOfValue(value);
+   } 
+   public virtual  void Remove(object key)
+   {
+    throw new NotSupportedException("Cannot modify a read-only list.");
+   } 
+   public virtual  void RemoveAt(int index)
+   {
+    throw new NotSupportedException("Cannot modify a read-only list.");
+   }
+		}
+
+	}
+	
+  
+ class  RelationHRefList   {
+		
+         interface  IRelationHRefListEnumerator {
+			
+             
+             
+            
+		}
+		
+     
+     
+     
+   
+     
+           
+           
+     
+     
+     
+     
+     
+         enum  Tag  {
+            Default
+        } 
+           
+     
+     
+     
+           
+           
+     
+     
+     
+     
+     
+     
+     
+     
+     
+           
+           
+     
+     
+     
+     
+     
+     
+     
+     
+     
+   
+   
+   
+      
+   
+   
+   
+   
+   
+   class  Enumerator   {
+			
+      
+      
+      
+      
+      
+      
+      
+   
+		}
+		
+         class  SyncRelationHRefList   {
+			
+               
+               
+               
+               
+               
+               
+               
+               
+               
+               
+               
+               
+               
+               
+               
+               
+               
+               
+               
+               
+               
+               
+              
+		}
+		
+         class  ReadOnlyRelationHRefList   {
+			
+               
+               
+               
+               
+               
+               
+               
+               
+               
+               
+               
+               
+               
+               
+               
+               
+               
+               
+               
+               
+               
+              
+		}
+
+	}
+
+}

@@ -1,0 +1,14 @@
+package net.sourceforge.pmd.lang.ecmascript.ast;
+
+import org.mozilla.javascript.ast.XmlDotQuery;
+
+public class ASTXmlDotQuery extends AbstractInfixEcmascriptNode<XmlDotQuery> {
+    public ASTXmlDotQuery(XmlDotQuery xmlDotQuery) {
+	super(xmlDotQuery);
+    }
+
+    
+    public Object jjtAccept(EcmascriptParserVisitor visitor, Object data) {
+	return visitor.visit(this, data);
+    }
+}

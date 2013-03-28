@@ -1,0 +1,329 @@
+namespace RssBandit.com.newsgator.services2 {
+    using System.Diagnostics;
+    using System.Web.Services;
+    using System.ComponentModel;
+    using System.Web.Services.Protocols;
+    using System;
+    using System.Xml.Serialization;
+    [System.CodeDom.Compiler.GeneratedCodeAttribute("System.Web.Services", "2.0.50727.42")]
+    [System.Diagnostics.DebuggerStepThroughAttribute()]
+    [System.ComponentModel.DesignerCategoryAttribute("code")]
+    [System.Web.Services.WebServiceBindingAttribute(Name="FeedWebServiceSoap", Namespace="http://services.newsgator.com/svc/Feed.asmx")]
+    public partial class FeedWebService : System.Web.Services.Protocols.SoapHttpClientProtocol {
+        private NGAPIToken nGAPITokenValueField;
+        private System.Threading.SendOrPostCallback GetNewsOperationCompleted;
+        private System.Threading.SendOrPostCallback MarkReadOperationCompleted;
+        private System.Threading.SendOrPostCallback MarkFeedsReadOperationCompleted;
+        private System.Threading.SendOrPostCallback GetFeedInfoSummaryFromXmlUrlOperationCompleted;
+        private bool useDefaultCredentialsSetExplicitly;
+        public FeedWebService() {
+            this.Url = "http://services.newsgator.com/ngws/svc/Feed.asmx";
+            if ((this.IsLocalFileSystemWebService(this.Url) == true)) {
+                this.UseDefaultCredentials = true;
+                this.useDefaultCredentialsSetExplicitly = false;
+            }
+            else {
+                this.useDefaultCredentialsSetExplicitly = true;
+            }
+        }
+        public NGAPIToken NGAPITokenValue {
+            get {
+                return this.nGAPITokenValueField;
+            }
+            set {
+                this.nGAPITokenValueField = value;
+            }
+        }
+        public new string Url {
+            get {
+                return base.Url;
+            }
+            set {
+                if ((((this.IsLocalFileSystemWebService(base.Url) == true)
+                            && (this.useDefaultCredentialsSetExplicitly == false))
+                            && (this.IsLocalFileSystemWebService(value) == false))) {
+                    base.UseDefaultCredentials = false;
+                }
+                base.Url = value;
+            }
+        }
+        public new bool UseDefaultCredentials {
+            get {
+                return base.UseDefaultCredentials;
+            }
+            set {
+                base.UseDefaultCredentials = value;
+                this.useDefaultCredentialsSetExplicitly = true;
+            }
+        }
+        public event GetNewsCompletedEventHandler GetNewsCompleted;
+        public event MarkReadCompletedEventHandler MarkReadCompleted;
+        public event MarkFeedsReadCompletedEventHandler MarkFeedsReadCompleted;
+        public event GetFeedInfoSummaryFromXmlUrlCompletedEventHandler GetFeedInfoSummaryFromXmlUrlCompleted;
+        [System.Web.Services.Protocols.SoapHeaderAttribute("NGAPITokenValue")]
+        [System.Web.Services.Protocols.SoapDocumentMethodAttribute("http://services.newsgator.com/svc/Feed.asmx/GetNews", RequestNamespace="http://services.newsgator.com/svc/Feed.asmx", ResponseNamespace="http://services.newsgator.com/svc/Feed.asmx", Use=System.Web.Services.Description.SoapBindingUse.Literal, ParameterStyle=System.Web.Services.Protocols.SoapParameterStyle.Wrapped)]
+        public System.Xml.XmlElement GetNews(int feedId, string locationName, string token, bool unreadOnly) {
+            object[] results = this.Invoke("GetNews", new object[] {
+                        feedId,
+                        locationName,
+                        token,
+                        unreadOnly});
+            return ((System.Xml.XmlElement)(results[0]));
+        }
+        public System.IAsyncResult BeginGetNews(int feedId, string locationName, string token, bool unreadOnly, System.AsyncCallback callback, object asyncState) {
+            return this.BeginInvoke("GetNews", new object[] {
+                        feedId,
+                        locationName,
+                        token,
+                        unreadOnly}, callback, asyncState);
+        }
+        public System.Xml.XmlElement EndGetNews(System.IAsyncResult asyncResult) {
+            object[] results = this.EndInvoke(asyncResult);
+            return ((System.Xml.XmlElement)(results[0]));
+        }
+        public void GetNewsAsync(int feedId, string locationName, string token, bool unreadOnly) {
+            this.GetNewsAsync(feedId, locationName, token, unreadOnly, null);
+        }
+        public void GetNewsAsync(int feedId, string locationName, string token, bool unreadOnly, object userState) {
+            if ((this.GetNewsOperationCompleted == null)) {
+                this.GetNewsOperationCompleted = new System.Threading.SendOrPostCallback(this.OnGetNewsOperationCompleted);
+            }
+            this.InvokeAsync("GetNews", new object[] {
+                        feedId,
+                        locationName,
+                        token,
+                        unreadOnly}, this.GetNewsOperationCompleted, userState);
+        }
+        private void OnGetNewsOperationCompleted(object arg) {
+            if ((this.GetNewsCompleted != null)) {
+                System.Web.Services.Protocols.InvokeCompletedEventArgs invokeArgs = ((System.Web.Services.Protocols.InvokeCompletedEventArgs)(arg));
+                this.GetNewsCompleted(this, new GetNewsCompletedEventArgs(invokeArgs.Results, invokeArgs.Error, invokeArgs.Cancelled, invokeArgs.UserState));
+            }
+        }
+        [System.Web.Services.Protocols.SoapHeaderAttribute("NGAPITokenValue")]
+        [System.Web.Services.Protocols.SoapDocumentMethodAttribute("http://services.newsgator.com/svc/Feed.asmx/MarkRead", RequestNamespace="http://services.newsgator.com/svc/Feed.asmx", ResponseNamespace="http://services.newsgator.com/svc/Feed.asmx", Use=System.Web.Services.Description.SoapBindingUse.Literal, ParameterStyle=System.Web.Services.Protocols.SoapParameterStyle.Wrapped)]
+        public void MarkRead(int feedId, string locationName, bool read, string syncToken) {
+            this.Invoke("MarkRead", new object[] {
+                        feedId,
+                        locationName,
+                        read,
+                        syncToken});
+        }
+        public System.IAsyncResult BeginMarkRead(int feedId, string locationName, bool read, string syncToken, System.AsyncCallback callback, object asyncState) {
+            return this.BeginInvoke("MarkRead", new object[] {
+                        feedId,
+                        locationName,
+                        read,
+                        syncToken}, callback, asyncState);
+        }
+        public void EndMarkRead(System.IAsyncResult asyncResult) {
+            this.EndInvoke(asyncResult);
+        }
+        public void MarkReadAsync(int feedId, string locationName, bool read, string syncToken) {
+            this.MarkReadAsync(feedId, locationName, read, syncToken, null);
+        }
+        public void MarkReadAsync(int feedId, string locationName, bool read, string syncToken, object userState) {
+            if ((this.MarkReadOperationCompleted == null)) {
+                this.MarkReadOperationCompleted = new System.Threading.SendOrPostCallback(this.OnMarkReadOperationCompleted);
+            }
+            this.InvokeAsync("MarkRead", new object[] {
+                        feedId,
+                        locationName,
+                        read,
+                        syncToken}, this.MarkReadOperationCompleted, userState);
+        }
+        private void OnMarkReadOperationCompleted(object arg) {
+            if ((this.MarkReadCompleted != null)) {
+                System.Web.Services.Protocols.InvokeCompletedEventArgs invokeArgs = ((System.Web.Services.Protocols.InvokeCompletedEventArgs)(arg));
+                this.MarkReadCompleted(this, new System.ComponentModel.AsyncCompletedEventArgs(invokeArgs.Error, invokeArgs.Cancelled, invokeArgs.UserState));
+            }
+        }
+        [System.Web.Services.Protocols.SoapHeaderAttribute("NGAPITokenValue")]
+        [System.Web.Services.Protocols.SoapDocumentMethodAttribute("http://services.newsgator.com/svc/Feed.asmx/MarkFeedsRead", RequestNamespace="http://services.newsgator.com/svc/Feed.asmx", ResponseNamespace="http://services.newsgator.com/svc/Feed.asmx", Use=System.Web.Services.Description.SoapBindingUse.Literal, ParameterStyle=System.Web.Services.Protocols.SoapParameterStyle.Wrapped)]
+        public void MarkFeedsRead(int[] feedIds, string locationName) {
+            this.Invoke("MarkFeedsRead", new object[] {
+                        feedIds,
+                        locationName});
+        }
+        public System.IAsyncResult BeginMarkFeedsRead(int[] feedIds, string locationName, System.AsyncCallback callback, object asyncState) {
+            return this.BeginInvoke("MarkFeedsRead", new object[] {
+                        feedIds,
+                        locationName}, callback, asyncState);
+        }
+        public void EndMarkFeedsRead(System.IAsyncResult asyncResult) {
+            this.EndInvoke(asyncResult);
+        }
+        public void MarkFeedsReadAsync(int[] feedIds, string locationName) {
+            this.MarkFeedsReadAsync(feedIds, locationName, null);
+        }
+        public void MarkFeedsReadAsync(int[] feedIds, string locationName, object userState) {
+            if ((this.MarkFeedsReadOperationCompleted == null)) {
+                this.MarkFeedsReadOperationCompleted = new System.Threading.SendOrPostCallback(this.OnMarkFeedsReadOperationCompleted);
+            }
+            this.InvokeAsync("MarkFeedsRead", new object[] {
+                        feedIds,
+                        locationName}, this.MarkFeedsReadOperationCompleted, userState);
+        }
+        private void OnMarkFeedsReadOperationCompleted(object arg) {
+            if ((this.MarkFeedsReadCompleted != null)) {
+                System.Web.Services.Protocols.InvokeCompletedEventArgs invokeArgs = ((System.Web.Services.Protocols.InvokeCompletedEventArgs)(arg));
+                this.MarkFeedsReadCompleted(this, new System.ComponentModel.AsyncCompletedEventArgs(invokeArgs.Error, invokeArgs.Cancelled, invokeArgs.UserState));
+            }
+        }
+        [System.Web.Services.Protocols.SoapHeaderAttribute("NGAPITokenValue")]
+        [System.Web.Services.Protocols.SoapDocumentMethodAttribute("http://services.newsgator.com/svc/Feed.asmx/GetFeedInfoSummaryFromXmlUrl", RequestNamespace="http://services.newsgator.com/svc/Feed.asmx", ResponseNamespace="http://services.newsgator.com/svc/Feed.asmx", Use=System.Web.Services.Description.SoapBindingUse.Literal, ParameterStyle=System.Web.Services.Protocols.SoapParameterStyle.Wrapped)]
+        public FeedInfoSummary[] GetFeedInfoSummaryFromXmlUrl(string[] xmlurls) {
+            object[] results = this.Invoke("GetFeedInfoSummaryFromXmlUrl", new object[] {
+                        xmlurls});
+            return ((FeedInfoSummary[])(results[0]));
+        }
+        public System.IAsyncResult BeginGetFeedInfoSummaryFromXmlUrl(string[] xmlurls, System.AsyncCallback callback, object asyncState) {
+            return this.BeginInvoke("GetFeedInfoSummaryFromXmlUrl", new object[] {
+                        xmlurls}, callback, asyncState);
+        }
+        public FeedInfoSummary[] EndGetFeedInfoSummaryFromXmlUrl(System.IAsyncResult asyncResult) {
+            object[] results = this.EndInvoke(asyncResult);
+            return ((FeedInfoSummary[])(results[0]));
+        }
+        public void GetFeedInfoSummaryFromXmlUrlAsync(string[] xmlurls) {
+            this.GetFeedInfoSummaryFromXmlUrlAsync(xmlurls, null);
+        }
+        public void GetFeedInfoSummaryFromXmlUrlAsync(string[] xmlurls, object userState) {
+            if ((this.GetFeedInfoSummaryFromXmlUrlOperationCompleted == null)) {
+                this.GetFeedInfoSummaryFromXmlUrlOperationCompleted = new System.Threading.SendOrPostCallback(this.OnGetFeedInfoSummaryFromXmlUrlOperationCompleted);
+            }
+            this.InvokeAsync("GetFeedInfoSummaryFromXmlUrl", new object[] {
+                        xmlurls}, this.GetFeedInfoSummaryFromXmlUrlOperationCompleted, userState);
+        }
+        private void OnGetFeedInfoSummaryFromXmlUrlOperationCompleted(object arg) {
+            if ((this.GetFeedInfoSummaryFromXmlUrlCompleted != null)) {
+                System.Web.Services.Protocols.InvokeCompletedEventArgs invokeArgs = ((System.Web.Services.Protocols.InvokeCompletedEventArgs)(arg));
+                this.GetFeedInfoSummaryFromXmlUrlCompleted(this, new GetFeedInfoSummaryFromXmlUrlCompletedEventArgs(invokeArgs.Results, invokeArgs.Error, invokeArgs.Cancelled, invokeArgs.UserState));
+            }
+        }
+        public new void CancelAsync(object userState) {
+            base.CancelAsync(userState);
+        }
+        private bool IsLocalFileSystemWebService(string url) {
+            if (((url == null)
+                        || (url == string.Empty))) {
+                return false;
+            }
+            System.Uri wsUri = new System.Uri(url);
+            if (((wsUri.Port >= 1024)
+                        && (string.Compare(wsUri.Host, "localHost", System.StringComparison.OrdinalIgnoreCase) == 0))) {
+                return true;
+            }
+            return false;
+        }
+    }
+    [System.CodeDom.Compiler.GeneratedCodeAttribute("System.Xml", "2.0.50727.832")]
+    [System.SerializableAttribute()]
+    [System.Diagnostics.DebuggerStepThroughAttribute()]
+    [System.ComponentModel.DesignerCategoryAttribute("code")]
+    [System.Xml.Serialization.XmlTypeAttribute(Namespace="http://services.newsgator.com/svc/Feed.asmx")]
+    [System.Xml.Serialization.XmlRootAttribute(Namespace="http://services.newsgator.com/svc/Feed.asmx", IsNullable=false)]
+    public partial class NGAPIToken : System.Web.Services.Protocols.SoapHeader {
+        private string tokenField;
+        public string Token {
+            get {
+                return this.tokenField;
+            }
+            set {
+                this.tokenField = value;
+            }
+        }
+    }
+    [System.CodeDom.Compiler.GeneratedCodeAttribute("System.Xml", "2.0.50727.832")]
+    [System.SerializableAttribute()]
+    [System.Diagnostics.DebuggerStepThroughAttribute()]
+    [System.ComponentModel.DesignerCategoryAttribute("code")]
+    [System.Xml.Serialization.XmlTypeAttribute(Namespace="http://services.newsgator.com/svc/Feed.asmx")]
+    public partial class FeedInfoSummary {
+        private int feedIDField;
+        private string titleField;
+        private string descriptionField;
+        private string xmlUrlField;
+        private string htmlLinkField;
+        public int FeedID {
+            get {
+                return this.feedIDField;
+            }
+            set {
+                this.feedIDField = value;
+            }
+        }
+        public string Title {
+            get {
+                return this.titleField;
+            }
+            set {
+                this.titleField = value;
+            }
+        }
+        public string Description {
+            get {
+                return this.descriptionField;
+            }
+            set {
+                this.descriptionField = value;
+            }
+        }
+        public string XmlUrl {
+            get {
+                return this.xmlUrlField;
+            }
+            set {
+                this.xmlUrlField = value;
+            }
+        }
+        public string HtmlLink {
+            get {
+                return this.htmlLinkField;
+            }
+            set {
+                this.htmlLinkField = value;
+            }
+        }
+    }
+    [System.CodeDom.Compiler.GeneratedCodeAttribute("System.Web.Services", "2.0.50727.42")]
+    public delegate void GetNewsCompletedEventHandler(object sender, GetNewsCompletedEventArgs e);
+    [System.CodeDom.Compiler.GeneratedCodeAttribute("System.Web.Services", "2.0.50727.42")]
+    [System.Diagnostics.DebuggerStepThroughAttribute()]
+    [System.ComponentModel.DesignerCategoryAttribute("code")]
+    public partial class GetNewsCompletedEventArgs : System.ComponentModel.AsyncCompletedEventArgs {
+        private object[] results;
+        internal GetNewsCompletedEventArgs(object[] results, System.Exception exception, bool cancelled, object userState) :
+                base(exception, cancelled, userState) {
+            this.results = results;
+        }
+        public System.Xml.XmlElement Result {
+            get {
+                this.RaiseExceptionIfNecessary();
+                return ((System.Xml.XmlElement)(this.results[0]));
+            }
+        }
+    }
+    [System.CodeDom.Compiler.GeneratedCodeAttribute("System.Web.Services", "2.0.50727.42")]
+    public delegate void MarkReadCompletedEventHandler(object sender, System.ComponentModel.AsyncCompletedEventArgs e);
+    [System.CodeDom.Compiler.GeneratedCodeAttribute("System.Web.Services", "2.0.50727.42")]
+    public delegate void MarkFeedsReadCompletedEventHandler(object sender, System.ComponentModel.AsyncCompletedEventArgs e);
+    [System.CodeDom.Compiler.GeneratedCodeAttribute("System.Web.Services", "2.0.50727.42")]
+    public delegate void GetFeedInfoSummaryFromXmlUrlCompletedEventHandler(object sender, GetFeedInfoSummaryFromXmlUrlCompletedEventArgs e);
+    [System.CodeDom.Compiler.GeneratedCodeAttribute("System.Web.Services", "2.0.50727.42")]
+    [System.Diagnostics.DebuggerStepThroughAttribute()]
+    [System.ComponentModel.DesignerCategoryAttribute("code")]
+    public partial class GetFeedInfoSummaryFromXmlUrlCompletedEventArgs : System.ComponentModel.AsyncCompletedEventArgs {
+        private object[] results;
+        internal GetFeedInfoSummaryFromXmlUrlCompletedEventArgs(object[] results, System.Exception exception, bool cancelled, object userState) :
+                base(exception, cancelled, userState) {
+            this.results = results;
+        }
+        public FeedInfoSummary[] Result {
+            get {
+                this.RaiseExceptionIfNecessary();
+                return ((FeedInfoSummary[])(this.results[0]));
+            }
+        }
+    }
+}

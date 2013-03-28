@@ -1,0 +1,1081 @@
+"""Implements the "Brew" filesystem protocol"""
+import os
+import p_brew
+import time
+import cStringIO
+import com_phone
+import prototypes
+import common
+class BrewNotSupported(Exception):
+    """This phone not supported"""
+    pass
+class BrewCommandException(Exception):
+    def __init__(self, errnum, str=None):
+        if str is None:
+            str="Brew Error 0x%02x" % (errnum,)
+        Exception.__init__(self, str)
+        self.errnum=errnum
+class BrewNoMoreEntriesException(BrewCommandException):
+    def __init__(self, errnum=0x1c):
+        BrewCommandException.__init__(self, errnum, "No more directory entries")
+class BrewNoSuchDirectoryException(BrewCommandException):
+    def __init__(self, errnum=0x08):
+        BrewCommandException.__init__(self, errnum, "No such directory")
+class BrewNoSuchFileException(BrewCommandException):
+    def __init__(self, errnum=0x06):
+        BrewCommandException.__init__(self, errnum, "No such file")
+class BrewBadPathnameException(BrewCommandException):
+    def __init__(self, errnum=0x1a):
+        BrewCommandException.__init__(self, errnum, "Bad pathname")
+class BrewFileLockedException(BrewCommandException):
+    def __init__(self, errnum=0x0b):
+        BrewCommandException.__init__(self, errnum, "File is locked")
+class BrewNameTooLongException(BrewCommandException):
+    def __init__(self, errnum=0x0d):
+        BrewCommandException.__init__(self, errnum, "Name is too long")
+class BrewDirectoryExistsException(BrewCommandException):
+    def __init__(self, errnum=0x07):
+        BrewCommandException.__init__(self, errnum, "Directory already exists")
+modeignoreerrortypes=com_phone.modeignoreerrortypes+(BrewCommandException,common.CommsDataCorruption)
+class _DirCache:
+    """This is a class that lets you do various filesystem manipulations and
+    it remembers the data.  Typical usage would be if you make changes to
+    files (adding, removing, rewriting) and then have to keep checking if
+    files exist, add sizes etc.  This class saves the hassle of rereading
+    the directory every single time.  Note that it will only see changes
+    you make via this class.  If you go directly to the Brew class then
+    those won't be seen.
+    """
+    def __init__(self, target):
+        "@param target: where operations should be done after recording them here"
+        self.__target=target
+        self.__cache={}
+    def rmfile(self, filename):
+        res=self.__target.rmfile(filename)
+        node=self._getdirectory(brewdirname(filename))
+        if node is None: # we didn't have it
+            return
+        del node[brewbasename(filename)]
+        return res
+    def stat(self, filename):
+        node=self._getdirectory(brewdirname(filename), ensure=True)
+        return node.get(brewbasename(filename), None)
+    def readfile(self, filename):
+        node=self._getdirectory(brewdirname(filename), ensure=True)
+        file=node.get(brewbasename(filename), None)
+        if file is None:
+            raise BrewNoSuchFileException()
+        data=file.get('data', None)
+        if data is None:
+            data=self.__target.getfilecontents(filename)
+            file['data']=data
+        return data
+    def writefile(self, filename, contents):
+        res=self.__target.writefile(filename, contents)
+        node=self._getdirectory(brewdirname(filename), ensure=True)
+        stat=node.get(brewbasename(filename), {'name': filename, 'type': 'file', 'date': (0, "")})
+        stat['size']=len(contents)
+        stat['data']=contents
+        node[brewbasename(filename)]=stat
+        return res
+    def _getdirectory(self, dirname, ensure=False):
+        if not ensure:
+            return self.__cache.get(dirname, None)
+        node=self.__cache.get(dirname, None)
+        if node is not None: return node
+        node={}
+        fs=self.__target.getfilesystem(dirname)
+        for filename in fs.keys():
+            node[brewbasename(filename)]=fs[filename]
+        self.__cache[dirname]=node
+        return node
+class DebugBrewProtocol:
+    """ Emulate a phone file system using a local file system.  This is used
+    when you may not have access to a physical phone, but have a copy of its
+    file system.
+    """
+    _fs_path=''
+    def __init__(self):
+        pass
+    def getfirmwareinformation(self):
+        self.log("Getting firmware information")
+    def explore0c(self):
+        self.log("Trying stuff with command 0x0c")
+    def offlinerequest(self, reset=False):
+        self.log("Taking phone offline")
+        if reset:
+            self.log("Resetting phone")
+    def modemmoderequest(self):
+        self.log("Attempting to put phone in modem mode")
+    def mkdir(self, name):
+        self.log("Making directory '"+name+"'")
+        os.mkdir(os.path.join(self._fs_path, name))
+    def mkdirs(self, directory):
+        if len(directory)<1:
+            return
+        dirs=directory.split('/')
+        for i in range(0,len(dirs)):
+            try:
+                self.mkdir("/".join(dirs[:i+1]))  # basically mkdir -p
+            except:
+                pass
+    def rmdir(self,name):
+        self.log("Deleting directory '"+name+"'")
+        os.rmdir(os.path.join(self._fs_path, name))
+    def rmfile(self,name):
+        self.log("Deleting file '"+name+"'")
+        os.remove(os.path.join(self._fs_path, name))
+    def rmdirs(self, path):
+        self.progress(0,1, "Listing child files and directories")
+        all=self.getfilesystem(path, 100)
+        keys=all.keys()
+        keys.sort()
+        keys.reverse()
+        count=0
+        for k in keys:
+            self.progress(count, len(keys), "Deleting "+k)
+            count+=1
+            if all[k]['type']=='directory':
+                self.rmdir(k)
+            else:
+                self.rmfile(k)
+        self.rmdir(path)
+    def listfiles(self, dir=''):
+        results={}
+        self.log("Listing files in dir: '"+dir+"'")
+        results={}
+        _pwd=os.path.join(self._fs_path, dir)
+        for _root,_dir,_file in os.walk(_pwd):
+            break
+        for f in _file:
+            _stat=os.stat(os.path.join(_pwd, f))
+            _date=_stat[8]
+            _name=dir+'/'+f
+            _timestr=''
+            try:
+                _timestr=time.strftime("%x %X", time.gmtime(_date))
+            except:
+                pass
+            results[_name]={ 'name': _name, 'type': 'file', 'size': _stat[6],
+                             'date': (_date, _timestr) }
+        return results
+    def listsubdirs(self, dir='', recurse=0):
+        results={}
+        self.log("Listing subdirs in dir: '"+dir+"'")
+        _pwd=os.path.join(self._fs_path, dir)
+        for _root,_dir,_file in os.walk(_pwd):
+            break
+        for d in _dir:
+            if len(dir):
+                d=dir+"/"+d
+            results[d]={ 'name': d, 'type': 'directory' }
+            if recurse>0:
+                results.update(self.listsubdirs(d, recurse-1))
+        return results
+    def getfilesystem(self, dir="", recurse=0):
+        results={}
+        _file=[]
+        _dir=[]
+        self.log("Listing dir '"+dir+"'")
+        _pwd=os.path.join(self._fs_path, dir)
+        for _root,_dir,_file in os.walk(_pwd):
+            break
+        for f in _file:
+            _stat=os.stat(os.path.join(_pwd, f))
+            _date=_stat[8]
+            _name=dir+'/'+f
+            _timestr=''
+            try:
+                _timestr=time.strftime("%x %X", time.gmtime(_date))
+            except:
+                pass
+            results[_name]={ 'name': _name, 'type': 'file', 'size': _stat[6],
+                             'date': (_date, _timestr) }
+        for d in _dir:
+            results[d]={ 'name': d, 'type': 'directory' }
+            if recurse>0:
+                results.update(self.getfilesystem(os.path.join(dir, d),
+                                                  recurse-1))
+        return results
+    def statfile(self, name):
+        _stat=os.stat(os.path.join(self._fs_path, name))
+        _date=_stat[8]
+        results={ 'name': name, 'type': 'file', 'size': _stat[6],
+                  'date': (_date,
+                           time.strftime("%x %X", time.gmtime(_date))) }
+        return results
+    def writefile(self, name, contents):
+        self.log("Writing file '"+name+"' bytes "+`len(contents)`)
+        file(os.path.join(self._fs_path, name), 'wb').write(contents)
+    def getfilecontents(self, name, use_cache=False):
+        self.log("Getting file contents '"+name+"'")
+        try:
+            if name[0]=='/':
+                return file(os.path.join(self._fs_path, name[1:]), 'rb').read()
+            return file(os.path.join(self._fs_path, name), 'rb').read()
+        except:
+            raise BrewNoSuchFileException
+    def get_brew_esn(self):
+        return "DEBUGESN"
+    def _setmodebrew(self):
+        self.log('_setmodebrew: in mode BREW')
+        return True
+    def sendbrewcommand(self, request, responseclass, callsetmode=True):
+        return NotImplementedError
+    def log(self, s):
+        print s
+    def logdata(self, s, data, klass=None):
+        print s
+    def exists(self, path):
+        return os.path.exists(os.path.join(self._fs_path, path))
+    DirCache=_DirCache
+class RealBrewProtocol:
+    "Talk to a phone using the 'brew' protocol"
+    MODEBREW="modebrew"
+    brewterminator="\x7e"
+    _brewepochtounix=315532800+406800
+    def __init__(self):
+        pass
+    def getfirmwareinformation(self):
+        self.log("Getting firmware information")
+        req=p_brew.firmwarerequest()
+        res=self.sendbrewcommand(req, p_brew.firmwareresponse)
+    def get_brew_esn(self):
+        return '%0X'%self.sendbrewcommand(p_brew.ESN_req(),
+                                          p_brew.ESN_resp).esn
+    def explore0c(self):
+        self.log("Trying stuff with command 0x0c")
+        req=p_brew.testing0crequest()
+        res=self.sendbrewcommand(req, p_brew.testing0cresponse)
+    def offlinerequest(self, reset=False):
+        req=p_brew.setmoderequest()
+        req.request=1
+        self.log("Taking phone offline")
+        self.sendbrewcommand(req, p_brew.setmoderesponse)
+        if reset:
+            req=p_brew.setmoderequest()
+            req.request=2
+            self.log("Resetting phone")
+            self.sendbrewcommand(req, p_brew.setmoderesponse)
+    def modemmoderequest(self):
+        self.log("Attempting to put phone in modem mode")
+        req=p_brew.setmodemmoderequest()
+        buffer=prototypes.buffer()
+        req.writetobuffer(buffer)
+        data=buffer.getvalue()
+        self.logdata("brew request", data, req)
+        data=common.pppescape(data+common.crcs(data))+common.pppterminator
+        self.comm.write(data)
+        self.comm.readsome(numchars=5)
+        self.mode=self.MODENONE # Probably should add a modem mode
+    def mkdir(self, name):
+        self.log("Making directory '"+name+"'")
+        req=p_brew.mkdirrequest()
+        req.dirname=name
+        self.sendbrewcommand(req, p_brew.mkdirresponse)
+    def mkdirs(self, directory):
+        if len(directory)<1:
+            return
+        dirs=directory.split('/')
+        for i in range(0,len(dirs)):
+            try:
+                self.mkdir("/".join(dirs[:i+1]))  # basically mkdir -p
+            except:
+                pass
+    def rmdir(self,name):
+        self.log("Deleting directory '"+name+"'")
+        req=p_brew.rmdirrequest()
+        req.dirname=name
+        self.sendbrewcommand(req, p_brew.rmdirresponse)
+    def rmfile(self,name):
+        self.log("Deleting file '"+name+"'")
+        req=p_brew.rmfilerequest()
+        req.filename=name
+        self.sendbrewcommand(req, p_brew.rmfileresponse)
+        file_cache.clear(name)
+    def rmdirs(self, path):
+        self.progress(0,1, "Listing child files and directories")
+        all=self.getfilesystem(path, 100)
+        keys=all.keys()
+        keys.sort()
+        keys.reverse()
+        count=0
+        for k in keys:
+            self.progress(count, len(keys), "Deleting "+k)
+            count+=1
+            if all[k]['type']=='directory':
+                self.rmdir(k)
+            else:
+                self.rmfile(k)
+        self.rmdir(path)
+    def exists(self, path):
+        req=p_brew.listfilerequest()
+        req.dirname=path
+        req.entrynumber=0
+        try:
+            res=self.sendbrewcommand(req,p_brew.listfileresponse)
+        except (BrewBadPathnameException, BrewNoSuchDirectoryException,
+                ValueError):
+            return False
+        except:
+            if __debug__:
+                raise
+            return False
+        return True
+    def listsubdirs(self, dir='', recurse=0):
+        results={}
+        self.log("Listing subdirs in dir: '"+dir+"'")
+        req=p_brew.listdirectoryrequest()
+        req.dirname=dir
+        for i in xrange(10000):
+            try:
+                req.entrynumber=i
+                res=self.sendbrewcommand(req,p_brew.listdirectoryresponse)
+                f=res.subdir.rfind("/")
+                if f>=0:
+                    subdir=res.subdir[f+1:]
+                else:
+                    subdir=res.subdir
+                if len(dir):
+                    subdir=dir+"/"+subdir
+                results[subdir]={ 'name': subdir, 'type': 'directory' }
+            except BrewNoMoreEntriesException:
+                break
+            except (BrewBadPathnameException, ValueError):
+                self.log('Failed to list dir '+dir)
+                return {}
+        if recurse:
+            for k,_subdir in results.items():
+                results.update(self.listsubdirs(_subdir['name'], recurse-1))
+        return results
+    def hassubdirs(self, dir=''):
+        self.log('Checking for subdirs in dir: "'+dir+'"')
+        req=p_brew.listdirectoryrequest()
+        req.dirname=dir
+        req.entrynumber=0
+        try:
+            res=self.sendbrewcommand(req,p_brew.listdirectoryresponse)
+            return True
+        except BrewNoMoreEntriesException:
+            return False
+        except:
+            if __debug__:
+                raise
+            return False
+    def listfiles(self, dir=''):
+        results={}
+        self.log("Listing files in dir: '"+dir+"'")
+        req=p_brew.listfilerequest()
+        req.dirname=dir
+        for i in xrange(10000):
+            try:
+                req.entrynumber=i
+                res=self.sendbrewcommand(req,p_brew.listfileresponse)
+                results[res.filename]={ 'name': res.filename, 'type': 'file',
+                                        'size': res.size }
+                if res.date==0:
+                    results[res.filename]['date']=(0, "")
+                else:
+                    try:
+                        date=res.date+self._brewepochtounix
+                        results[res.filename]['date']=(date, time.strftime("%x %X", time.gmtime(date)))
+                    except:
+                        results[res.filename]['date']=(0, "")
+            except BrewNoMoreEntriesException:
+                break
+            except (BrewBadPathnameException, ValueError):
+                self.log('Failed to list files in dir '+dir)
+                return {}
+        return results
+    def getfilesystem(self, dir="", recurse=0):
+        self.log("Getting file system in dir '"+dir+"'")
+        results=self.listsubdirs(dir)
+        subdir_list=[x['name'] for k,x in results.items()]
+        results.update(self.listfiles(dir))
+        if recurse:
+            for _subdir in subdir_list:
+                results.update(self.getfilesystem(_subdir, recurse-1))
+        return results
+    def statfile(self, name):
+        try:
+            self.log('stat file '+name)
+            req=p_brew.statfilerequest()
+            req.filename=name
+            res=self.sendbrewcommand(req, p_brew.statfileresponse)
+            results={ 'name': name, 'type': 'file', 'size': res.size,
+                      'datevalue': res.date }
+            if res.date==0:
+                results['date']=(0, '')
+            else:
+                try:
+                    date=res.date+self._brewepochtounix
+                    results['date']=(date, time.strftime("%x %X", time.gmtime(date)))
+                except:
+                    results['date']=(0, '')
+            return results
+        except BrewNoSuchFileException:
+            return None
+        except:
+            if __debug__:
+                raise
+            return None
+    def setfileattr(self, filename, date):
+        self.log('set file date '+filename +`date`)
+        req=p_brew.setfileattrrequest()
+        req.date=date-self._brewepochtounix
+        req.filename=filename
+        self.sendbrewcommand(req, p_brew.setfileattrresponse)
+    def writefile(self, name, contents):
+        start=time.time()
+        self.log("Writing file '"+name+"' bytes "+`len(contents)`)
+        desc="Writing "+name
+        req=p_brew.writefilerequest()
+        req.filesize=len(contents)
+        req.data=contents[:0x100]
+        req.filename=name
+        self.sendbrewcommand(req, p_brew.writefileresponse)
+        numblocks=len(contents)/0x100
+        count=0
+        for offset in range(0x100, len(contents), 0x100):
+            req=p_brew.writefileblockrequest()
+            count+=1
+            if count>=0x100: count=1
+            if count % 5==0:
+                self.progress(offset>>8,numblocks,desc)
+            req.blockcounter=count
+            req.thereismore=offset+0x100<len(contents)
+            block=contents[offset:]
+            l=min(len(block), 0x100)
+            block=block[:l]
+            req.data=block
+            self.sendbrewcommand(req, p_brew.writefileblockresponse)
+        end=time.time()
+        if end-start>3:
+            self.log("Wrote "+`len(contents)`+" bytes at "+`int(len(contents)/(end-start))`+" bytes/second")
+    def getfilecontents(self, file, use_cache=False):
+        if use_cache:
+            node=self.statfile(file)
+            if node and file_cache.hit(file, node['date'][0], node['size']):
+                self.log('Reading from cache: '+file)
+                _data=file_cache.data(file)
+                if _data:
+                    return _data
+                self.log('Cache file corrupted and discarded')
+        start=time.time()
+        self.log("Getting file contents '"+file+"'")
+        desc="Reading "+file
+        data=cStringIO.StringIO()
+        req=p_brew.readfilerequest()
+        req.filename=file
+        res=self.sendbrewcommand(req, p_brew.readfileresponse)
+        filesize=res.filesize
+        data.write(res.data)
+        counter=0
+        while res.thereismore:
+            counter+=1
+            if counter>0xff:
+                counter=0x01
+            if counter%5==0:
+                self.progress(data.tell(), filesize, desc)
+            req=p_brew.readfileblockrequest()
+            req.blockcounter=counter
+            res=self.sendbrewcommand(req, p_brew.readfileblockresponse)
+            data.write(res.data)
+        self.progress(1,1,desc)
+        data=data.getvalue()
+        end=time.time()
+        if end-start>3:
+            self.log("Read "+`filesize`+" bytes at "+`int(filesize/(end-start))`+" bytes/second")
+        if filesize!=len(data):
+            self.log("expected size "+`filesize`+"  actual "+`len(data)`)
+            self.raisecommsexception("Brew file read is incorrect size", common.CommsDataCorruption)
+        if use_cache and node:
+            file_cache.add(file, node.get('date', [0])[0], data)
+        return data
+    DirCache=_DirCache
+    def _setmodebrew(self):
+        req=p_brew.memoryconfigrequest()
+        respc=p_brew.memoryconfigresponse
+        for baud in 0, 38400,115200:
+            if baud:
+                if not self.comm.setbaudrate(baud):
+                    continue
+            try:
+                self.sendbrewcommand(req, respc, callsetmode=False)
+                return True
+            except modeignoreerrortypes:
+                pass
+        for baud in (0, 115200, 19200, 230400):
+            if baud:
+                if not self.comm.setbaudrate(baud):
+                    continue
+            print "Baud="+`baud`
+            try:
+                for line in self.comm.sendatcommand("+GMM"):
+                    if line.find("SPH-A700")>0:
+                        raise BrewNotSupported("This phone is not supported by BitPim", self.desc)
+            except modeignoreerrortypes:
+                self.log("No response to AT+GMM")
+            except:
+                print "GMM Exception"
+                self.mode=self.MODENONE
+                self.comm.shouldloop=True
+                raise
+            try:
+                self.comm.write("AT$QCDMG\r\n")
+            except:
+                self.mode=self.MODENONE
+                self.comm.shouldloop=True
+                raise
+            try:
+                if self.comm.readsome().find("OK")>=0:
+                    break
+            except modeignoreerrortypes:
+                self.log("No response to setting QCDMG mode")
+        for baud in 0,38400,115200:
+            if baud:
+                if not self.comm.setbaudrate(baud):
+                    continue
+            try:
+                self.sendbrewcommand(req, respc, callsetmode=False)
+                return True
+            except modeignoreerrortypes:
+                pass
+        return False
+    def sendbrewcommand(self, request, responseclass, callsetmode=True):
+        if callsetmode:
+            self.setmode(self.MODEBREW)
+        buffer=prototypes.buffer()
+        request.writetobuffer(buffer)
+        data=buffer.getvalue()
+        self.logdata("brew request", data, request)
+        data=common.pppescape(data+common.crcs(data))+common.pppterminator
+        firsttwo=data[:2]
+        try:
+            data=self.comm.writethenreaduntil(data, False, common.pppterminator, logreaduntilsuccess=False) 
+        except modeignoreerrortypes:
+            self.mode=self.MODENONE
+            self.raisecommsdnaexception("manipulating the filesystem")
+        self.comm.success=True
+        origdata=data
+        d=data.rfind(common.pppterminator,0,-1)
+        if d>=0:
+            self.log("Multiple packets in data - taking last one starting at "+`d+1`)
+            self.logdata("Original data", origdata, None)
+            data=data[d+1:]
+        data=common.pppunescape(data)
+        d=data.find(firsttwo)
+        if d>0:
+            self.log("Junk at begining of packet, data at "+`d`)
+            self.logdata("Original data", origdata, None)
+            self.logdata("Working on data", data, None)
+            data=data[d:]
+        crc=data[-3:-1]
+        data=data[:-3]
+        calccrc=common.crcs(data)
+        if calccrc!=crc:
+            self.logdata("Original data", origdata, None)
+            self.logdata("Working on data", data, None)
+            raise common.CommsDataCorruption("Brew packet failed CRC check", self.desc)
+        self.logdata("brew response", data, responseclass)
+        if firsttwo=="Y\x0c" and data==firsttwo:
+            raise common.CommsWrongPort("The port you are using is echoing data back, and is not valid for Brew data.  Most likely you have selected the modem interface when you should be using the diagnostic interface.", self.desc)
+        if data[0]=="Y" and data[2]!="\x00":  # Y is 0x59 which is brew command prefix
+                err=ord(data[2])
+                if err==0x1c:
+                    raise BrewNoMoreEntriesException()
+                if err==0x08:
+                    raise BrewNoSuchDirectoryException()
+                if err==0x06:
+                    raise BrewNoSuchFileException()
+                if err==0x1a:
+                    raise BrewBadPathnameException()
+                if err==0x0b:
+                    raise BrewFileLockedException()
+                if err==0x0d:
+                    raise BrewNameTooLongException()
+                if err==0x07:
+                    raise BrewDirectoryExistsException()
+                raise BrewCommandException(err)
+        buffer=prototypes.buffer(data)
+        res=responseclass()
+        try:
+            res.readfrombuffer(buffer)
+        except:
+            self.log(formatpacketerrorlog("Error decoding response", origdata, data, responseclass))
+            raise
+        return res
+class RealBrewProtocol2:
+    """Talk to a phone using the 'brew' protocol
+    This class uses the new filesystem commands which are supported
+    by newer qualcomm chipsets used in phones like the LG vx8100
+    """
+    def exists(self, name):
+        try:
+            self.statfile(name)
+        except BrewNoSuchFileException:
+            return False
+        return True
+    def reconfig_directory(self):
+        req=p_brew.new_reconfigfilesystemrequest()
+        self.sendbrewcommand(req, p_brew.new_reconfigfilesystemresponse)
+    def rmfile(self,name):
+        self.log("Deleting file '"+name+"'")
+        if self.exists(name):
+            req=p_brew.new_rmfilerequest()
+            req.filename=name
+            self.sendbrewcommand(req, p_brew.new_rmfileresponse)
+        file_cache.clear(name)
+    def rmdir(self,name):
+        self.log("Deleting directory '"+name+"'")
+        if self.exists(name):
+            req=p_brew.new_rmdirrequest()
+            req.dirname=name
+            self.sendbrewcommand(req, p_brew.new_rmdirresponse)
+            self.reconfig_directory()
+    def mkdir(self, name):
+        self.log("Making directory '"+name+"'")
+        if self.exists(name):
+            raise BrewDirectoryExistsException
+        req=p_brew.new_mkdirrequest()
+        req.dirname=name
+        self.sendbrewcommand(req, p_brew.new_mkdirresponse)
+        self.reconfig_directory()
+    def openfile(self, name, mode, flags=p_brew.new_fileopen_flag_existing):
+        self.log("Open file '"+name+"'")
+        req=p_brew.new_openfilerequest()
+        req.filename=name
+        req.mode=mode
+        req.flags=flags
+        res=self.sendbrewcommand(req, p_brew.new_openfileresponse)
+        return res.handle
+    def closefile(self, handle):
+        self.log("Close file")
+        req=p_brew.new_closefilerequest()
+        req.handle=handle
+        self.sendbrewcommand(req, p_brew.new_closefileresponse)
+    def writefile(self, name, contents):
+        start=time.time()
+        self.log("Writing file '"+name+"' bytes "+`len(contents)`)
+        desc="Writing "+name
+        size=len(contents)       
+        exists=self.exists(name)
+        if exists:
+            info=self.statfile(name)
+            current_size=info['size']
+        else:
+            current_size=0
+        if exists and size<current_size:
+            self.rmfile(name)
+            exists=False
+        if exists:
+            handle=self.openfile(name, p_brew.new_fileopen_mode_write, p_brew.new_fileopen_flag_existing)
+        else:
+            handle=self.openfile(name, p_brew.new_fileopen_mode_write, p_brew.new_fileopen_flag_create)
+        if not handle:
+            raise BrewNoSuchFileException
+        try:
+            remain=size
+            pos=0
+            count=0
+            while remain:
+                req=p_brew.new_writefilerequest()
+                req.handle=handle
+                if remain>243:
+                    req.bytes=243
+                else:
+                    req.bytes=remain
+                req.position=size-remain
+                req.data=contents[req.position:(req.position+req.bytes)]
+                count=(count&0xff)+1
+                if count % 5==0:
+                    self.progress(req.position,size,desc)
+                res=self.sendbrewcommand(req, p_brew.new_writefileresponse)
+                if res.bytes!=req.bytes:
+                    self.raisecommsexception("Brew file write error", common.CommsDataCorruption)
+                remain-=req.bytes
+        except Exception, e: # MUST close handle to file
+            self.closefile(handle)
+            raise Exception, e 
+        self.closefile(handle)
+        self.progress(1,1,desc)
+        end=time.time()
+        if end-start>3:
+            self.log("Wrote "+`len(contents)`+" bytes at "+`int(len(contents)/(end-start))`+" bytes/second")
+    def getfilecontents(self, file, use_cache=False):
+        node=self.statfile(file)
+        if use_cache:
+            if node and file_cache.hit(file, node['date'][0], node['size']):
+                self.log('Reading from cache: '+file)
+                _data=file_cache.data(file)
+                if _data:
+                    return _data
+                self.log('Cache file corrupted and discarded')
+        start=time.time()
+        self.log("Getting file contents '"+file+"'")
+        desc="Reading "+file
+        data=cStringIO.StringIO()
+        handle=self.openfile(file, p_brew.new_fileopen_mode_read)
+        if not handle:
+            raise BrewNoSuchFileException
+        try:
+            filesize=node['size']
+            read=0
+            counter=0
+            while True:
+                counter=(counter&0xff)+1
+                if counter%5==0:
+                    self.progress(data.tell(), filesize, desc)
+                req=p_brew.new_readfilerequest()
+                req.handle=handle
+                req.bytes=0xEB
+                req.position=read
+                res=self.sendbrewcommand(req, p_brew.new_readfileresponse)
+                if res.bytes:
+                    data.write(res.data)
+                    read+=res.bytes
+                else:
+                    break
+                if read==filesize:
+                    break
+        except Exception, e: # MUST close handle to file
+            self.closefile(handle)
+            raise Exception, e 
+        self.closefile(handle)
+        self.progress(1,1,desc)
+        data=data.getvalue()
+        end=time.time()
+        if end-start>3:
+            self.log("Read "+`filesize`+" bytes at "+`int(filesize/(end-start))`+" bytes/second")
+        if filesize!=len(data):
+            self.log("expected size "+`filesize`+"  actual "+`len(data)`)
+            self.raisecommsexception("Brew file read is incorrect size", common.CommsDataCorruption)
+        if use_cache and node:
+            file_cache.add(file, node.get('date', [0])[0], data)
+        return data
+    def listfiles(self, dir=''):
+        self.log("Listing files in dir: '"+dir+"'")
+        return self.getfilesystem(dir, recurse=0, directories=0)
+    def getfilesystem(self, dir="", recurse=0, directories=1, files=1):
+        results={}
+        self.log("Listing dir '"+dir+"'")
+        req=p_brew.new_opendirectoryrequest()
+        if dir=="":
+            req.dirname="/"
+        else:
+            req.dirname=dir
+        res=self.sendbrewcommand(req, p_brew.new_opendirectoryresponse)
+        handle=res.handle
+        if handle==0: # happens if the directory does not exist
+            raise BrewNoSuchDirectoryException
+        dirs={}
+        count=0
+        try:
+            for i in xrange(1, 10000):
+                req=p_brew.new_listentryrequest()
+                req.entrynumber=i
+                req.handle=handle
+                res=self.sendbrewcommand(req, p_brew.new_listentryresponse)
+                if len(res.entryname) == 0: # signifies end of list
+                    break
+                if len(dir):
+                    direntry=dir+"/"+res.entryname
+                else:
+                    direntry=res.entryname
+                if files and res.type==0: # file
+                    results[direntry]={ 'name': direntry, 'type': 'file',
+                                    'size': res.size }
+                    if res.date==0:
+                        results[direntry]['date']=(0, "")
+                    else:
+                        results[direntry]['date']=(res.date, time.strftime("%x %X", time.localtime(res.date)))
+                elif directories and res.type: # directory
+                    results[direntry]={ 'name': direntry, 'type': 'directory' }
+                    if recurse>0:
+                        dirs[count]=direntry
+                        count+=1
+        except Exception, e: # we MUST close the handle regardless or we wont be able to list the filesystem
+            req=p_brew.new_closedirectoryrequest()
+            req.handle=handle
+            res=self.sendbrewcommand(req, p_brew.new_closedirectoryresponse)
+            raise Exception, e
+        req=p_brew.new_closedirectoryrequest()
+        req.handle=handle
+        res=self.sendbrewcommand(req, p_brew.new_closedirectoryresponse)
+        for i in range(count):
+            results.update(self.getfilesystem(dirs[i], recurse-1))
+        return results
+    def statfile(self, name):
+        self.log('stat file '+name)
+        req=p_brew.new_statfilerequest()
+        req.filename=name
+        res=self.sendbrewcommand(req, p_brew.new_statfileresponse)
+        if res.flags==2:
+            raise BrewNoSuchFileException
+        if res.type==1:
+            results={ 'name': name, 'type': 'file', 'size': res.size }
+            if res.created_date==0:
+                results['date']=(0, '')
+            else:
+                results['date']=(res.created_date, time.strftime("%x %X", time.localtime(res.created_date)))
+        else:
+            results={ 'name': name, 'type': 'directory' }
+        return results
+class BrewProtocol(RealBrewProtocol):
+    """This is just a wrapper class that allows the manipulation between
+    RealBrewProtocol and DebugBrewProtocol classes.
+    """
+    def __init__(self):
+        phone_path=os.environ.get('PHONE_FS', None)
+        if __debug__ and phone_path:
+            print 'Debug Phone File System:',phone_path
+            DebugBrewProtocol._fs_path=os.path.normpath(phone_path)
+            self._update_base_class(self.__class__)
+        elif __debug__ and getattr(self, "protocolclass", 0) and \
+                getattr(self.protocolclass, "BREW_FILE_SYSTEM", 0) == 2:
+            print '_set_new_brew', self.protocolclass
+    def _update_base_class(self, klass):
+        _bases=[]
+        found=False
+        for e in klass.__bases__:
+            if e==RealBrewProtocol:
+                _bases.append(DebugBrewProtocol)
+                found=True
+            else:
+                _bases.append(e)
+        if found:
+            klass.__bases__=tuple(_bases)
+        else:
+            for e in _bases:
+                self._update_base_class(e)
+    def _set_new_brew(self, klass):
+        _bases=[]
+        found=False
+        for e in klass.__bases__:
+            if e==RealBrewProtocol:
+                _bases.append(RealBrewProtocol2)
+                found=True
+            _bases.append(e)
+        if found:
+            klass.__bases__=tuple(_bases)
+        else:
+            for e in _bases:
+                self._set_new_brew(e)
+def formatpacketerrorlog(str, origdata, data, klass):
+    hd=""
+    if data is not None:
+        hd="Data - "+`len(data)`+" bytes\n"
+        if klass is not None:
+            try:
+                hd+="<#! %s.%s !#>\n" % (klass.__module__, klass.__name__)
+            except:
+                klass=klass.__class__
+                hd+="<#! %s.%s !#>\n" % (klass.__module__, klass.__name__)
+        hd+=common.datatohexstring(data)
+    if origdata is not None:
+        hd+="\nOriginal Data - "+`len(data)`+" bytes\n"+common.datatohexstring(origdata)
+    return str+" "+hd
+def brewbasename(str):
+    "returns basename of str"
+    if str.rfind("/")>0:
+        return str[str.rfind("/")+1:]
+    return str
+def brewdirname(str):
+    "returns dirname of str"
+    if str.rfind("/")>0:
+        return str[:str.rfind("/")]
+    return str
+class SPURIOUSZERO(prototypes.BaseProtogenClass):
+    """This is a special class used to consume the spurious zero in some p_brew.listfileresponse
+    The three bytes are formatted as follows:
+       - An optional 'null' byte (this class)
+       - A byte specifying how long the directory name portion is, including trailing slash
+       - A byte specifying the length of the whole name
+       - The bytes of the filename (which includes the full directory name)
+    Fun and games ensue because files in the root directory have a zero length directory
+    name, so we have some heuristics to try and distinguish if the first byte is the
+    spurious zero or not
+    Also allow for zero length filenames.
+    """
+    def __init__(self, *args, **kwargs):
+        super(SPURIOUSZERO,self).__init__(*args, **kwargs)
+        self._value=None
+        if self._ismostderived(SPURIOUSZERO):
+            self._update(args, kwargs)
+    def _update(self, args, kwargs):
+        super(SPURIOUSZERO, self)._update(args, kwargs)
+        self._complainaboutunusedargs(SPURIOUSZERO, kwargs)
+        if len(args):
+            raise TypeError("Unexpected arguments "+`args`)
+    def readfrombuffer(self, buf):
+         self._bufferstartoffset=buf.getcurrentoffset()
+         while True:  # this is just used so we can break easily
+             if buf.peeknextbyte()!=0:
+                 self._value=-1
+                 break
+             if buf.peeknextbyte(1)==0:
+                 if buf.howmuchmore()==2:
+                     break
+                 self._value=buf.getnextbyte() # consume sz
+                 break
+             all=buf.peeknextbytes(min(max(2+buf.peeknextbyte(1), 3+buf.peeknextbyte(2)), buf.howmuchmore()))
+             ddirlen=ord(all[1])
+             dfulllen=ord(all[2])
+             if ddirlen<dfulllen and ddirlen<len(all)-3 and all[3+ddirlen-1]=='/':
+                 self._value=buf.getnextbyte() # consume sz
+                 break
+             self._value=-2
+             break
+         self._bufferendoffset=buf.getcurrentoffset()
+    def writetobuffer(self, buf):
+        raise NotImplementedError()
+    def packetsize(self):
+         raise NotImplementedError()
+    def getvalue(self):
+        "Returns the string we are"
+        if self._value is None:
+            raise prototypes.ValueNotSetException()
+        return self._value
+file_cache=None
+class EmptyFileCache(object):
+    def __init__(self, bitpim_path):
+        self._path=None
+        self._cache_file_name=None
+        self._data={ 'file_index': 0 }
+        self.esn=None
+    def hit(self, file_name, datetime, data_len):
+        return False
+    def data(self, file_name):
+        return None
+    def add(self, file_name, datetime, data):
+        pass
+    def clear(self, file_name):
+        pass
+    def set_path(self, bitpim_path):
+        try:
+            print 'setting path to',`bitpim_path`
+            if not bitpim_path:
+                raise ValueError
+            self.__class__=FileCache
+            self._path=os.path.join(bitpim_path, 'cache')
+            self._cache_file_name=os.path.join(self._path,
+                                               self._cache_index_file_name)
+            self._check_path()
+            self._read_index()
+            self._write_index()
+        except:
+            self.__class__=EmptyFileCache
+class FileCache(object):
+    _cache_index_file_name='index.idx'
+    current_version=1
+    def __init__(self, bitpim_path):
+        self._path=os.path.join(bitpim_path, 'cache')
+        self._cache_file_name=os.path.join(self._path,
+                                           self._cache_index_file_name)
+        self._data={ 'file_index': 0 }
+        self.esn=None
+        try:
+            if not bitpim_path:
+                raise ValueError
+            self._check_path()
+            self._read_index()
+            self._write_index()
+        except:
+            self.__class__=EmptyFileCache
+    def _check_path(self):
+        try:
+            os.makedirs(self._path)
+        except:
+            pass
+        if not os.path.isdir(self._path):
+            raise Exception("Bad cache directory: '"+self._path+"'")
+    def _read_index(self):
+        self._check_path()
+        d={ 'result': {} }
+        try:
+            common.readversionedindexfile(self._cache_file_name, d, None,
+                                          self.current_version)
+            self._data.update(d['result'])
+        except:
+            print 'failed to read cache index file'
+    def _write_index(self):
+        self._check_path()
+        common.writeversionindexfile(self._cache_file_name, self._data,
+                                     self.current_version)
+    def _entry(self, file_name):
+        k=self._data.get(self.esn, None)
+        if k:
+            return k.get(file_name, None)
+    def hit(self, file_name, datetime, data_len):
+        try:
+            e=self._entry(file_name)
+            if e:
+                return e['datetime'] and e['datetime']==datetime and \
+                       e['size']==data_len
+            return False
+        except:
+            if __debug__:
+                raise
+            return False
+    def data(self, file_name):
+        try:
+            e=self._entry(file_name)
+            if e:
+                _data=file(os.path.join(self._path, e['cache']), 'rb').read()
+                if len(_data)==e['size']:
+                    return _data
+        except IOError:
+            return None
+        except:
+            if __debug__:
+                raise
+            return None
+    def add(self, file_name, datetime, data):
+        try:
+            if self.esn:
+                e=self._entry(file_name)
+                if not e:
+                    self._data.setdefault(self.esn, {})[file_name]={}
+                    e=self._data[self.esn][file_name]
+                    e['cache']='F%05d'%self._data['file_index']
+                    self._data['file_index']+=1
+                e['datetime']=datetime
+                e['size']=len(data)
+                _cache_file_name=os.path.join(self._path, e['cache'])
+                try:
+                    file(_cache_file_name, 'wb').write(data)
+                    self._write_index()
+                except IOError:
+                    self._read_index()
+        except:
+            if __debug__:
+                raise
+    def clear(self, file_name):
+        try:
+            e=self._entry(file_name)
+            if e:
+                try:
+                    os.remove(os.path.join(self._path, e['cache']))
+                except:
+                    pass
+                del self._data[self.esn][file_name]
+                self._write_index()
+        except:
+            if __debug__:
+                raise
+    def set_path(self, bitpim_path):
+        try:
+            print 'setting path to',`bitpim_path`
+            if not bitpim_path:
+                raise ValueError
+            self.__class__=FileCache
+            self._path=os.path.join(bitpim_path, 'cache')
+            self._cache_file_name=os.path.join(self._path,
+                                               self._cache_index_file_name)
+            self._check_path()
+            self._read_index()
+            self._write_index()
+        except:
+            raise
+            self.__class__=EmptyFileCache
+

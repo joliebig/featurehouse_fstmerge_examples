@@ -1,0 +1,30 @@
+package net.sourceforge.pmd.parsers;
+
+import net.sourceforge.pmd.ast.JavaCharStream;
+import net.sourceforge.pmd.ast.JavaParser;
+import net.sourceforge.pmd.ast.ParseException;
+
+import java.io.Reader;
+import java.util.Map;
+
+
+public class Java13Parser implements Parser {
+
+    private JavaParser parser;
+    private String marker;
+
+    public Object parse(Reader source) throws ParseException {
+        parser = new JavaParser(new JavaCharStream(source));
+        parser.setJDK13();
+        parser.setExcludeMarker(marker);
+        return parser.CompilationUnit();
+    }
+
+    public Map<Integer, String> getExcludeMap() {
+        return parser.getExcludeMap();
+    }
+
+    public void setExcludeMarker(String marker) {
+        this.marker = marker;
+    }
+}

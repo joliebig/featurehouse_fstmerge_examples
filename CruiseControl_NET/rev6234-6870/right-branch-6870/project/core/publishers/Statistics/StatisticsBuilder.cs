@@ -1,0 +1,68 @@
+using System.Collections.Generic;
+using System.IO;
+using System.Xml;
+using System.Xml.XPath;
+using ThoughtWorks.CruiseControl.Core.Tasks;
+namespace ThoughtWorks.CruiseControl.Core.Publishers.Statistics
+{
+    public class StatisticsBuilder
+    {
+        private readonly List<Statistic> logStatistics = new List<Statistic>();
+        public StatisticsBuilder()
+        {
+            Add(new FirstMatch("StartTime", "/cruisecontrol/build/@date"));
+            Add(new FirstMatch("Duration", "/cruisecontrol/build/@buildtime"));
+            Add(new Statistic("TestCount", "sum(//test-results/@total)"));
+            Add(new Statistic("TestFailures", "sum(//test-results/@failures)"));
+            Add(new Statistic("TestIgnored", "sum(//test-results/@not-run)"));
+   Add(new Statistic("GendarmeDefects", "count(//gendarme-output//rule/target/defect)"));
+   Add(new Statistic("FxCop Warnings", "count(//FxCopReport//Message[Issue/@Level='Warning' or Issue/@Level='CriticalWarning'])"));
+   Add(new Statistic("FxCop Errors", "count(//FxCopReport//Message[Issue/@Level='Error' or Issue/@Level='CriticalError'])"));
+            Add(new FirstMatch("BuildErrorType", "//failure/builderror/type"));
+            Add(new FirstMatch("BuildErrorMessage", "//failure/builderror/message"));
+        }
+        internal StatisticsResults ProcessBuildResults(TaskContext context)
+        {
+            var xmlResultString = new StringWriter();
+            context.WriteCurrentLog(xmlResultString);
+            var results = xmlResultString.ToString();
+            return ProcessBuildResults(results);
+        }
+        internal StatisticsResults ProcessBuildResults(string xmlString)
+        {
+            XmlDocument doc = new XmlDocument();
+            doc.Load(new StringReader(xmlString));
+            return ProcessLog(doc);
+        }
+        internal void Add(Statistic statistic)
+        {
+            if (!logStatistics.Contains(statistic))
+            {
+                logStatistics.Add(statistic);
+            }
+            else
+            {
+                int indexOf = logStatistics.IndexOf(statistic);
+                logStatistics.Remove(statistic);
+                if (statistic.Include)
+                {
+                    logStatistics.Insert(indexOf, statistic);
+                }
+            }
+        }
+        private StatisticsResults ProcessLog(IXPathNavigable doc)
+        {
+            XPathNavigator nav = doc.CreateNavigator();
+            StatisticsResults statisticResults = new StatisticsResults();
+            foreach (Statistic s in logStatistics)
+            {
+                statisticResults.Add(s.Apply(nav));
+            }
+            return statisticResults;
+        }
+        public List<Statistic> Statistics
+        {
+            get { return logStatistics; }
+        }
+    }
+}

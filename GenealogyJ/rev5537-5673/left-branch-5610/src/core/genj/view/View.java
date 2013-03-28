@@ -1,0 +1,61 @@
+
+package genj.view;
+
+import genj.gedcom.Context;
+
+import java.awt.Component;
+import java.awt.LayoutManager;
+import java.awt.Window;
+
+import javax.swing.JPanel;
+import javax.swing.JPopupMenu;
+
+
+public abstract class View extends JPanel implements SelectionListener {
+
+  
+  public View() {
+  }
+  
+  
+  public View(LayoutManager lm) {
+    super(lm);
+  }
+  
+  
+  public void commit() {
+  }
+
+  
+  public boolean closing() {
+    return true;
+  }
+
+  
+  public static View getView(Component componentInView) {
+    do {
+      if (componentInView instanceof View)
+        return (View)componentInView;
+      
+      if (componentInView instanceof JPopupMenu)
+        componentInView = ((JPopupMenu)componentInView).getInvoker();
+      else if (componentInView instanceof Window)
+        componentInView = ((Window)componentInView).getOwner();
+      else
+        componentInView = componentInView.getParent();
+    } while (componentInView!=null);
+    
+    throw new IllegalArgumentException("Cannot find view for component");
+  }
+
+  
+  public void setContext(Context context, boolean isActionPerformed) {
+    
+  }
+
+  
+  public void populate(ToolBar toolbar) {
+    
+  }
+  
+}

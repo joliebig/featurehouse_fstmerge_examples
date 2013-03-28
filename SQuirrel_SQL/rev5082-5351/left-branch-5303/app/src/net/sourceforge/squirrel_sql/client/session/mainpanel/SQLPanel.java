@@ -1,0 +1,1031 @@
+package net.sourceforge.squirrel_sql.client.session.mainpanel;
+
+import java.awt.BorderLayout;
+import java.awt.Dimension;
+import java.awt.GridLayout;
+import java.awt.event.ActionEvent;
+import java.awt.event.ActionListener;
+import java.beans.PropertyChangeEvent;
+import java.beans.PropertyChangeListener;
+import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.HashMap;
+import java.util.List;
+import java.util.prefs.Preferences;
+
+import javax.swing.*;
+import javax.swing.event.ChangeEvent;
+import javax.swing.event.ChangeListener;
+import javax.swing.event.DocumentEvent;
+import javax.swing.event.DocumentListener;
+import javax.swing.event.EventListenerList;
+import javax.swing.undo.UndoManager;
+
+import net.sourceforge.squirrel_sql.client.IApplication;
+import net.sourceforge.squirrel_sql.client.gui.builders.UIFactory;
+import net.sourceforge.squirrel_sql.client.resources.SquirrelResources;
+import net.sourceforge.squirrel_sql.client.session.ISQLEntryPanel;
+import net.sourceforge.squirrel_sql.client.session.ISQLPanelAPI;
+import net.sourceforge.squirrel_sql.client.session.ISession;
+import net.sourceforge.squirrel_sql.client.session.SQLPanelAPI;
+import net.sourceforge.squirrel_sql.client.session.action.OpenSqlHistoryAction;
+import net.sourceforge.squirrel_sql.client.session.action.RedoAction;
+import net.sourceforge.squirrel_sql.client.session.action.UndoAction;
+import net.sourceforge.squirrel_sql.client.session.event.IResultTabListener;
+import net.sourceforge.squirrel_sql.client.session.event.ISQLExecutionListener;
+import net.sourceforge.squirrel_sql.client.session.event.ISQLPanelListener;
+import net.sourceforge.squirrel_sql.client.session.event.ISQLResultExecuterTabListener;
+import net.sourceforge.squirrel_sql.client.session.event.ResultTabEvent;
+import net.sourceforge.squirrel_sql.client.session.event.SQLExecutionAdapter;
+import net.sourceforge.squirrel_sql.client.session.event.SQLPanelEvent;
+import net.sourceforge.squirrel_sql.client.session.event.SQLResultExecuterTabEvent;
+import net.sourceforge.squirrel_sql.client.session.properties.SessionProperties;
+import net.sourceforge.squirrel_sql.fw.gui.FontInfo;
+import net.sourceforge.squirrel_sql.fw.gui.IntegerField;
+import net.sourceforge.squirrel_sql.fw.gui.MemoryComboBox;
+import net.sourceforge.squirrel_sql.fw.sql.ISQLConnection;
+import net.sourceforge.squirrel_sql.fw.util.Resources;
+import net.sourceforge.squirrel_sql.fw.util.StringManager;
+import net.sourceforge.squirrel_sql.fw.util.StringManagerFactory;
+import net.sourceforge.squirrel_sql.fw.util.log.ILogger;
+import net.sourceforge.squirrel_sql.fw.util.log.LoggerController;
+
+public class SQLPanel extends JPanel
+{
+    private static final long serialVersionUID = 1L;
+
+    
+	private static final ILogger s_log = LoggerController.createLogger(SQLPanel.class);
+
+    
+    private static final StringManager s_stringMgr =
+        StringManagerFactory.getStringManager(SQLPanel.class);   
+    
+	
+	private final static String LINE_SEPARATOR = "\n";
+
+	
+	private static boolean s_loadedSQLHistory;
+
+	
+	transient private ISession _session;
+
+	private SQLHistoryComboBox _sqlCombo;
+	transient private ISQLEntryPanel _sqlEntry;
+	private JCheckBox _limitRowsChk;
+	private IntegerField _nbrRows = new IntegerField();
+
+	private JScrollPane _sqlEntryScroller;
+
+	transient private SqlComboListener _sqlComboListener = new SqlComboListener();
+	transient private MyPropertiesListener _propsListener;
+
+	
+
+
+	
+
+
+	
+
+
+	
+
+
+	
+
+   
+   private JPanel _executerPanleHolder;
+
+	private JTabbedPane _tabbedExecuterPanel;
+	private JPanel _simpleExecuterPanel;
+
+	private boolean _hasBeenVisible = false;
+	private JSplitPane _splitPane;
+
+
+	
+	private EventListenerList _listeners = new EventListenerList();
+
+	private UndoManager _undoManager = new SquirrelDefaultUndoManager();
+
+	
+
+
+	private final List<ISQLResultExecuter> _executors = 
+        new ArrayList<ISQLResultExecuter>();
+
+	private SQLResultExecuterPanel _sqlExecPanel;
+
+	transient private ISQLPanelAPI _panelAPI;
+
+   private static final String PREFS_KEY_SPLIT_DIVIDER_LOC = "squirrelSql_sqlPanel_divider_loc";
+   private UndoAction _undoAction;
+   private RedoAction _redoAction;
+
+   
+   private boolean _inMainSessionWindow;
+	transient private SQLPanel.SQLExecutorHistoryListener _sqlExecutorHistoryListener = new SQLExecutorHistoryListener();
+   private ArrayList<SqlPanelListener> _sqlPanelListeners = new ArrayList<SqlPanelListener>();
+
+
+   
+	public SQLPanel(ISession session, boolean isInMainSessionWindow)
+	{
+		super();
+		_inMainSessionWindow = isInMainSessionWindow;
+		setSession(session);
+		createGUI();
+		propertiesHaveChanged(null);
+		_sqlExecPanel = new SQLResultExecuterPanel(session);
+		_sqlExecPanel.addSQLExecutionListener(_sqlExecutorHistoryListener);
+		addExecutor(_sqlExecPanel);
+		_panelAPI = new SQLPanelAPI(this);
+	}
+
+	
+	public synchronized void setSession(ISession session)
+	{
+		if (session == null)
+		{
+			throw new IllegalArgumentException("Null ISession passed");
+		}
+		sessionClosing();
+		_session = session;
+		_propsListener = new MyPropertiesListener();
+		_session.getProperties().addPropertyChangeListener(_propsListener);
+	}
+
+	
+	public ISQLPanelAPI getSQLPanelAPI()
+	{
+		return _panelAPI;
+	}
+
+	
+	public synchronized ISession getSession()
+	{
+		return _session;
+	}
+
+	public void addExecutor(ISQLResultExecuter exec)
+	{
+		_executors.add(exec);
+
+      if(1 == _executors.size())
+      {
+         _executerPanleHolder.remove(_tabbedExecuterPanel);
+         _executerPanleHolder.add(_simpleExecuterPanel);
+      }
+      else if(2 == _executors.size())
+      {
+         _executerPanleHolder.remove(_simpleExecuterPanel);
+         _executerPanleHolder.add(_tabbedExecuterPanel);
+         _executors.get(0);
+         ISQLResultExecuter buf = _executors.get(0);
+         _tabbedExecuterPanel.addTab(buf.getTitle(), null, buf.getComponent(), buf.getTitle());
+      }
+
+
+      if( 1 < _executors.size())
+      {
+         _tabbedExecuterPanel.addTab(exec.getTitle(), null, exec.getComponent(), exec.getTitle());
+      }
+      else
+      {
+         _simpleExecuterPanel.add(exec.getComponent());
+      }
+
+		this.fireExecuterTabAdded(exec);
+	}
+
+	public void removeExecutor(ISQLResultExecuter exec)
+	{
+		_executors.remove(exec);
+	}
+
+	public SQLResultExecuterPanel getSQLExecPanel()
+	{
+		return _sqlExecPanel;
+	}
+
+	
+	public synchronized void addSQLExecutionListener(ISQLExecutionListener lis)
+	{
+		if (lis == null)
+		{
+			throw new IllegalArgumentException("null ISQLExecutionListener passed");
+		}
+		
+      _sqlExecPanel.addSQLExecutionListener(lis);
+   }
+
+	
+	public synchronized void removeSQLExecutionListener(ISQLExecutionListener lis)
+	{
+		if (lis == null)
+		{
+			throw new IllegalArgumentException("null ISQLExecutionListener passed");
+		}
+		
+      _sqlExecPanel.removeSQLExecutionListener(lis);
+	}
+
+	
+	public synchronized void addSQLPanelListener(ISQLPanelListener lis)
+	{
+		if (lis == null)
+		{
+			throw new IllegalArgumentException("null ISQLPanelListener passed");
+		}
+		_listeners.add(ISQLPanelListener.class, lis);
+	}
+
+	
+	public synchronized void removeSQLPanelListener(ISQLPanelListener lis)
+	{
+		if (lis == null)
+		{
+			throw new IllegalArgumentException("null ISQLPanelListener passed");
+		}
+		_listeners.remove(ISQLPanelListener.class, lis);
+	}
+
+
+	
+	public void addExecuterTabListener(ISQLResultExecuterTabListener lis)
+	{
+ 		if (lis == null)
+ 		{
+ 			throw new IllegalArgumentException("ISQLExecutionListener == null");
+ 		}
+ 		_listeners.add(ISQLResultExecuterTabListener.class, lis);
+	}
+
+
+	public synchronized void removeExecuterTabListener(ISQLResultExecuterTabListener lis)
+	{
+		if (lis == null)
+		{
+			throw new IllegalArgumentException("ISQLResultExecuterTabListener == null");
+		}
+		_listeners.remove(ISQLResultExecuterTabListener.class, lis);
+	}
+
+
+	public ISQLEntryPanel getSQLEntryPanel()
+	{
+		return _sqlEntry;
+	}
+
+
+	public void runCurrentExecuter()
+	{
+      if(1 == _executors.size())
+      {
+         ISQLResultExecuter exec = _executors.get(0);
+         exec.execute(_sqlEntry);
+      }
+      else
+      {
+         int selectedIndex = _tabbedExecuterPanel.getSelectedIndex();
+         ISQLResultExecuter exec = _executors.get(selectedIndex);
+         exec.execute(_sqlEntry);
+      }
+	}
+
+	
+	void sessionClosing()
+	{
+		if (_propsListener != null)
+		{
+			_session.getProperties().removePropertyChangeListener(_propsListener);
+			_propsListener = null;
+		}
+	}
+
+   public void sessionWindowClosing()
+   {
+
+      fireSQLEntryAreaClosed();
+
+      if(_hasBeenVisible)
+      {
+         int dividerLoc = _splitPane.getDividerLocation();
+         Preferences.userRoot().putInt(PREFS_KEY_SPLIT_DIVIDER_LOC, dividerLoc);
+      }
+
+		_sqlCombo.removeActionListener(_sqlComboListener);
+		_sqlCombo.dispose();
+		_sqlExecPanel.removeSQLExecutionListener(_sqlExecutorHistoryListener);
+		
+
+
+
+      for (SqlPanelListener l : _sqlPanelListeners)
+      {
+         l.panelParentWindowClosing();
+      }
+
+      _sqlEntry.dispose();
+
+
+   }
+
+
+	private void installSQLEntryPanel(ISQLEntryPanel pnl)
+	{
+		if (pnl == null)
+		{
+			throw new IllegalArgumentException("Null ISQLEntryPanel passed");
+		}
+
+		_sqlEntry = pnl;
+
+		final int pos = _splitPane.getDividerLocation();
+		if (!_sqlEntry.getDoesTextComponentHaveScroller())
+		{
+			_sqlEntryScroller = new JScrollPane(_sqlEntry.getTextComponent());
+			_sqlEntryScroller.setBorder(BorderFactory.createEmptyBorder());
+			_splitPane.add(_sqlEntryScroller);
+		}
+		else
+		{
+			_splitPane.add(_sqlEntry.getTextComponent(), JSplitPane.LEFT);
+		}
+		_splitPane.setDividerLocation(pos);
+
+		if (!_sqlEntry.hasOwnUndoableManager())
+		{
+			IApplication app = _session.getApplication();
+			Resources res = app.getResources();
+			_undoAction = new UndoAction(app, _undoManager);
+			_redoAction = new RedoAction(app, _undoManager);
+
+			JComponent comp = _sqlEntry.getTextComponent();
+			comp.registerKeyboardAction(_undoAction, res.getKeyStroke(_undoAction),
+							WHEN_ANCESTOR_OF_FOCUSED_COMPONENT);
+			comp.registerKeyboardAction(_redoAction, res.getKeyStroke(_redoAction),
+							WHEN_ANCESTOR_OF_FOCUSED_COMPONENT);
+			_sqlEntry.setUndoActions(_undoAction, _redoAction);
+
+			_sqlEntry.setUndoManager(_undoManager);
+		}
+
+      fireSQLEntryAreaInstalled();
+	}
+
+
+   public void setVisible(boolean value)
+   {
+      super.setVisible(value);
+      if (value)
+      {
+         _hasBeenVisible = true;
+      }
+   }
+
+
+   
+	public void addSQLToHistory(SQLHistoryItem sql)
+	{
+		if (sql == null)
+		{
+			throw new IllegalArgumentException("SQLHistoryItem == null");
+		}
+
+		_sqlComboListener.stopListening();
+		try
+		{
+			int beforeSize = 0;
+			int afterSize = _sqlCombo.getItemCount();
+			do
+			{
+				beforeSize = afterSize;
+				_sqlCombo.removeItem(sql);
+				afterSize = _sqlCombo.getItemCount();
+			} while (beforeSize != afterSize);
+			_sqlCombo.insertItemAt(sql, afterSize);
+			_sqlCombo.setSelectedIndex(afterSize);
+         _sqlCombo.repaint();
+		}
+		finally
+		{
+			_sqlComboListener.startListening();
+		}
+	}
+
+	
+	public void addToSQLEntryAreaMenu(JMenu menu)
+	{
+		if (menu == null)
+		{
+			throw new IllegalArgumentException("Menu == null");
+		}
+		getSQLEntryPanel().addToSQLEntryAreaMenu(menu);
+	}
+
+	
+	public JMenuItem addToSQLEntryAreaMenu(Action action)
+	{
+		if (action == null)
+		{
+			throw new IllegalArgumentException("Action == null");
+		}
+		return getSQLEntryPanel().addToSQLEntryAreaMenu(action);
+	}
+
+	private void fireSQLEntryAreaInstalled()
+	{
+		
+		Object[] listeners = _listeners.getListenerList();
+		
+		
+		SQLPanelEvent evt = null;
+		for (int i = listeners.length - 2; i >= 0; i -= 2)
+		{
+			if (listeners[i] == ISQLPanelListener.class)
+			{
+				
+				if (evt == null)
+				{
+					evt = new SQLPanelEvent(_session, this);
+				}
+				((ISQLPanelListener)listeners[i + 1]).sqlEntryAreaInstalled(evt);
+			}
+		}
+	}
+
+
+   private void fireSQLEntryAreaClosed()
+   {
+      
+      Object[] listeners = _listeners.getListenerList();
+      
+      
+      SQLPanelEvent evt = null;
+      for (int i = listeners.length - 2; i >= 0; i -= 2)
+      {
+         if (listeners[i] == ISQLPanelListener.class)
+         {
+            
+            if (evt == null)
+            {
+               evt = new SQLPanelEvent(_session, this);
+            }
+            ((ISQLPanelListener)listeners[i + 1]).sqlEntryAreaClosed(evt);
+         }
+      }
+   }
+
+   @SuppressWarnings("unused")
+   private void fireTabTornOffEvent(IResultTab tab)
+	{
+		
+		Object[] listeners = _listeners.getListenerList();
+		
+		
+		ResultTabEvent evt = null;
+		for (int i = listeners.length - 2; i >= 0; i -= 2)
+		{
+			if (listeners[i] == IResultTabListener.class)
+			{
+				
+				if (evt == null)
+				{
+					evt = new ResultTabEvent(_session, tab);
+				}
+				((IResultTabListener) listeners[i + 1]).resultTabTornOff(evt);
+			}
+		}
+	}
+
+   @SuppressWarnings("unused")
+	private void fireTornOffResultTabReturned(IResultTab tab)
+	{
+		
+		Object[] listeners = _listeners.getListenerList();
+		
+		
+		ResultTabEvent evt = null;
+		for (int i = listeners.length - 2; i >= 0; i -= 2)
+		{
+			if (listeners[i] == IResultTabListener.class)
+			{
+				
+				if (evt == null)
+				{
+					evt = new ResultTabEvent(_session, tab);
+				}
+				((IResultTabListener) listeners[i + 1]).tornOffResultTabReturned(evt);
+			}
+		}
+	}
+
+   private void fireExecuterTabAdded(ISQLResultExecuter exec)
+	{
+		
+		Object[] listeners = _listeners.getListenerList();
+		
+		
+		SQLResultExecuterTabEvent evt = null;
+		for (int i = listeners.length - 2; i >= 0; i -= 2)
+		{
+			if (listeners[i] == ISQLResultExecuterTabListener.class)
+			{
+				
+				if (evt == null)
+				{
+					evt = new SQLResultExecuterTabEvent(_session, exec);
+				}
+				((ISQLResultExecuterTabListener)listeners[i + 1]).executerTabAdded(evt);
+			}
+		}
+	}
+
+	private void fireExecuterTabActivated(ISQLResultExecuter exec)
+	{
+		
+		Object[] listeners = _listeners.getListenerList();
+		
+		
+		SQLResultExecuterTabEvent evt = null;
+		for (int i = listeners.length - 2; i >= 0; i -= 2)
+		{
+			if (listeners[i] == ISQLResultExecuterTabListener.class)
+			{
+				
+				if (evt == null)
+				{
+					evt = new SQLResultExecuterTabEvent(_session, exec);
+				}
+				((ISQLResultExecuterTabListener)listeners[i + 1]).executerTabActivated(evt);
+			}
+		}
+	}
+
+
+	private void appendSQL(String sql)
+	{
+		if (_sqlEntry.getText().length() > 0)
+		{
+			_sqlEntry.appendText(LINE_SEPARATOR + LINE_SEPARATOR);
+		}
+		_sqlEntry.appendText(sql, true);
+		_sqlEntry.requestFocus();
+	}
+
+	private void copySelectedItemToEntryArea()
+	{
+		SQLHistoryItem item = (SQLHistoryItem)_sqlCombo.getSelectedItem();
+		if (item != null)
+		{
+			appendSQL(item.getSQL());
+		}
+	}
+
+	@SuppressWarnings("unused")
+	private void openSQLHistory()
+	{
+      new SQLHistoryController(_session, getSQLPanelAPI(), ((SQLHistoryComboBoxModel)_sqlCombo.getModel()).getItems());
+   }
+
+	private void propertiesHaveChanged(String propName)
+	{
+		final SessionProperties props = _session.getProperties();
+		if (propName == null || propName.equals(
+				SessionProperties.IPropertyNames.SQL_SHARE_HISTORY))
+		{
+			_sqlCombo.setUseSharedModel(props.getSQLShareHistory());
+		}
+
+		if (propName == null || propName.equals(SessionProperties.IPropertyNames.AUTO_COMMIT))
+		{
+            SetAutoCommitTask task = new SetAutoCommitTask();
+            if (SwingUtilities.isEventDispatchThread()) {
+                _session.getApplication().getThreadPool().addTask(task);
+            } else {
+                task.run();
+            }
+		}
+
+		if (propName == null || propName.equals(SessionProperties.IPropertyNames.SQL_LIMIT_ROWS))
+		{
+			_limitRowsChk.setSelected(props.getSQLLimitRows());
+		}
+
+		if (propName == null
+			|| propName.equals(SessionProperties.IPropertyNames.SQL_NBR_ROWS_TO_SHOW))
+		{
+			_nbrRows.setInt(props.getSQLNbrRowsToShow());
+		}
+
+		if (propName == null || propName.equals(SessionProperties.IPropertyNames.FONT_INFO))
+		{
+			FontInfo fi = props.getFontInfo();
+			if (fi != null)
+			{
+				_sqlEntry.setFont(fi.createFont());
+			}
+		}
+
+		if (propName == null || propName.equals(SessionProperties.IPropertyNames.SQL_ENTRY_HISTORY_SIZE)
+							|| propName.equals(SessionProperties.IPropertyNames.LIMIT_SQL_ENTRY_HISTORY_SIZE))
+		{
+			if (props.getLimitSQLEntryHistorySize())
+			{
+				_sqlCombo.setMaxMemoryCount(props.getSQLEntryHistorySize());
+			}
+			else
+			{
+				_sqlCombo.setMaxMemoryCount(MemoryComboBox.NO_MAX);
+			}
+		}
+
+	}
+
+   public void addSqlPanelListener(SqlPanelListener sqlPanelListener)
+   {
+      _sqlPanelListeners.add(sqlPanelListener);
+   }
+
+   public ArrayList<SQLHistoryItem> getSQLHistoryItems()
+   {
+      return ((SQLHistoryComboBoxModel)_sqlCombo.getModel()).getItems();
+   }
+
+   private class SetAutoCommitTask implements Runnable {
+        
+        public void run() {
+            final ISQLConnection conn = _session.getSQLConnection();
+            final SessionProperties props = _session.getProperties();
+            if (conn != null)
+            {
+                boolean auto = true;
+                try
+                {
+                    auto = conn.getAutoCommit();
+                }
+                catch (SQLException ex)
+                {
+                    s_log.error("Error with transaction control", ex);
+                    _session.showErrorMessage(ex);
+                }
+                try
+                {
+                    conn.setAutoCommit(props.getAutoCommit());
+                }
+                catch (SQLException ex)
+                {
+                    props.setAutoCommit(auto);
+                    _session.showErrorMessage(ex);
+                }
+            }        
+        }
+    }    
+    
+	private void createGUI()
+	{
+		final IApplication app = _session.getApplication();
+		synchronized (getClass())
+		{
+			if (!s_loadedSQLHistory)
+			{
+				final SQLHistory sqlHistory = app.getSQLHistory();
+				SQLHistoryComboBoxModel.initializeSharedInstance(sqlHistory.getData());
+				s_loadedSQLHistory = true;
+			}
+		}
+
+
+		_tabbedExecuterPanel = UIFactory.getInstance().createTabbedPane();
+		_tabbedExecuterPanel.addChangeListener(new MyExecuterPaneListener());
+
+		setLayout(new BorderLayout());
+
+		_nbrRows.setColumns(8);
+
+		final SessionProperties props = _session.getProperties();
+		_sqlCombo = new SQLHistoryComboBox(props.getSQLShareHistory());
+		_sqlCombo.setEditable(false);
+		if (_sqlCombo.getItemCount() > 0)
+		{
+			_sqlCombo.setSelectedIndex(_sqlCombo.getItemCount() - 1);
+		}
+
+		{
+			JPanel pnl = new JPanel();
+			pnl.setLayout(new BorderLayout());
+			pnl.add(_sqlCombo, BorderLayout.CENTER);
+
+			Box box = Box.createHorizontalBox();
+			box.add(new CopyLastButton(app));
+			box.add(new ShowHistoryButton(app));
+			box.add(Box.createHorizontalStrut(10));
+            
+            String hint = 
+                s_stringMgr.getString("SQLPanel.limitrowscheckbox.label");
+            _limitRowsChk = new JCheckBox(hint);
+			box.add(_limitRowsChk);
+			box.add(Box.createHorizontalStrut(5));
+			box.add(_nbrRows);
+			pnl.add(box, BorderLayout.EAST);
+			add(pnl, BorderLayout.NORTH);
+		}
+
+      createSplitPaneWithHackToSetSplitLocation();
+		_splitPane.setOneTouchExpandable(true);
+
+		installSQLEntryPanel(
+		        app.getSQLEntryPanelFactory().createSQLEntryPanel(
+		                _session, 
+		                new HashMap<String, Object>()));
+
+      _executerPanleHolder = new JPanel(new GridLayout(1,1));
+      _simpleExecuterPanel = new JPanel(new GridLayout(1,1));
+      _executerPanleHolder.add(_simpleExecuterPanel);
+      _splitPane.add(_executerPanleHolder, JSplitPane.RIGHT);
+
+		add(_splitPane, BorderLayout.CENTER);
+
+		_sqlCombo.addActionListener(_sqlComboListener);
+		_limitRowsChk.addChangeListener(new LimitRowsCheckBoxListener());
+		_nbrRows.getDocument().addDocumentListener(new LimitRowsTextBoxListener());
+
+		
+		SwingUtilities.invokeLater(new Runnable()
+		{
+			public void run()
+			{
+				_sqlEntry.getTextComponent().requestFocus();
+			}
+		});
+	}
+
+   private void createSplitPaneWithHackToSetSplitLocation()
+   {
+      final int dividerLoc = Preferences.userRoot().getInt(PREFS_KEY_SPLIT_DIVIDER_LOC, 50);
+
+      final Timer timer = new Timer(500, new ActionListener()
+      {
+         public void actionPerformed(ActionEvent e)
+         {
+            _splitPane.setDividerLocation(dividerLoc);
+         }
+      });
+
+      timer.setRepeats(false);
+
+      _splitPane = new JSplitPane(JSplitPane.VERTICAL_SPLIT)
+      {
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+         @Override
+         public void setDividerLocation(int location)
+         {
+            if (timer.isRunning())
+            {
+               super.setDividerLocation(dividerLoc);
+               timer.restart();
+            }
+            else
+            {
+               super.setDividerLocation(location);
+            }
+         }
+      };
+
+      _splitPane.setDividerLocation(dividerLoc);
+      timer.start();
+      SwingUtilities.invokeLater(new Runnable()
+      {
+         public void run()
+         {
+            timer.restart();
+         }
+      });
+
+   }
+
+   public Action getUndoAction()
+   {
+      return _undoAction;
+   }
+
+   public Action getRedoAction()
+   {
+      return _redoAction;
+   }
+
+   public boolean isInMainSessionWindow()
+   {
+      return _inMainSessionWindow;
+   }
+
+   
+	private class MyExecuterPaneListener implements ChangeListener
+	{
+		public void stateChanged(ChangeEvent e)
+		{
+			JTabbedPane pane = (JTabbedPane)e.getSource();
+			int index = pane.getSelectedIndex();
+			if (index != -1)
+			{
+				fireExecuterTabActivated(_executors.get(index));
+			}
+		}
+	}
+
+	private class MyPropertiesListener implements PropertyChangeListener
+	{
+		private boolean _listening = true;
+
+		void stopListening()
+		{
+			_listening = false;
+		}
+
+		void startListening()
+		{
+			_listening = true;
+		}
+
+		public void propertyChange(PropertyChangeEvent evt)
+		{
+			if (_listening)
+			{
+				propertiesHaveChanged(evt.getPropertyName());
+			}
+		}
+	}
+
+	private class SqlComboListener implements ActionListener
+	{
+		private boolean _listening = true;
+
+		void stopListening()
+		{
+			_listening = false;
+		}
+
+		void startListening()
+		{
+			_listening = true;
+		}
+
+		public void actionPerformed(ActionEvent evt)
+		{
+			if (_listening)
+			{
+				
+				
+				
+				
+
+
+
+					copySelectedItemToEntryArea();
+				}
+			}
+
+
+
+
+
+
+
+
+
+
+	}
+
+	private class LimitRowsCheckBoxListener implements ChangeListener
+	{
+		public void stateChanged(ChangeEvent evt)
+		{
+			if (_propsListener != null)
+			{
+				_propsListener.stopListening();
+			}
+			try
+			{
+				final boolean limitRows = ((JCheckBox)evt.getSource()).isSelected();
+				_nbrRows.setEnabled(limitRows);
+				_session.getProperties().setSQLLimitRows(limitRows);
+			}
+			finally
+			{
+				if (_propsListener != null)
+				{
+					_propsListener.startListening();
+				}
+			}
+		}
+	}
+
+	private class LimitRowsTextBoxListener implements DocumentListener
+	{
+		public void insertUpdate(DocumentEvent evt)
+		{
+			updateProperties(evt);
+		}
+
+		public void changedUpdate(DocumentEvent evt)
+		{
+			updateProperties(evt);
+		}
+
+		public void removeUpdate(DocumentEvent evt)
+		{
+			updateProperties(evt);
+		}
+		@SuppressWarnings("unused")
+		private void updateProperties(DocumentEvent evt)
+		{
+			if (_propsListener != null)
+			{
+				_propsListener.stopListening();
+			}
+			try
+			{
+				_session.getProperties().setSQLNbrRowsToShow(_nbrRows.getInt());
+			}
+			finally
+			{
+				if (_propsListener != null)
+				{
+					_propsListener.startListening();
+				}
+			}
+		}
+	}
+
+
+	private class CopyLastButton extends JButton
+	{
+        private static final long serialVersionUID = 1L;
+
+        CopyLastButton(IApplication app)
+		{
+			super();
+			final SquirrelResources rsrc = app.getResources();
+			final ImageIcon icon = rsrc.getIcon(SquirrelResources.IImageNames.COPY_SELECTED);
+			setIcon(icon);
+            
+			String hint = s_stringMgr.getString("SQLPanel.copylastbutton.hint");
+            setToolTipText(hint);
+			Dimension dm = getPreferredSize();
+			dm.setSize(dm.height, dm.height);
+			setPreferredSize(dm);
+			addActionListener(new ActionListener()
+			{
+				public void actionPerformed(ActionEvent e)
+				{
+					copySelectedItemToEntryArea();
+				}
+			});
+		}
+	}
+
+	private class ShowHistoryButton extends JButton
+	{
+        private static final long serialVersionUID = 1L;
+
+        ShowHistoryButton(IApplication app)
+		{
+         final SquirrelResources rsrc = app.getResources();
+         final ImageIcon icon = rsrc.getIcon(SquirrelResources.IImageNames.SQL_HISTORY);
+         setIcon(icon);
+         
+         String hint = s_stringMgr.getString("SQLPanel.openSqlHistory.hint");
+         setToolTipText(hint);
+         Dimension dm = getPreferredSize();
+         dm.setSize(dm.height, dm.height);
+			setPreferredSize(dm);
+         addActionListener(_session.getApplication().getActionCollection().get(OpenSqlHistoryAction.class));
+		}
+	}
+
+	
+	private class SQLExecutorHistoryListener extends SQLExecutionAdapter
+	{
+      public void statementExecuted(String sql)
+      {
+         _panelAPI.addSQLToHistory(sql);
+      }
+	}
+}

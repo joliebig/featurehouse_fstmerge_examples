@@ -1,0 +1,129 @@
+
+package genj.gedcom;
+
+import genj.util.swing.ImageIcon;
+
+import java.io.File;
+import java.io.IOException;
+import java.io.InputStream;
+
+
+public class PropertyFile extends Property {
+
+  
+  public final static ImageIcon DEFAULT_IMAGE = Grammar.V55.getMeta(new TagPath("INDI:OBJE:FILE")).getImage();
+
+  
+  private String  file;
+
+  
+  private boolean isRelativeChecked = false;
+  
+  
+  public PropertyFile(String tag) {
+    super(tag);
+  }
+
+  
+  public boolean addFile(File file) {
+    setValue(file.getAbsolutePath(), true);
+    return true;
+  }
+
+  
+  public String getValue() {
+
+    if (file==null)
+      return "";
+
+    
+    
+    
+    if (!isRelativeChecked) {
+      Gedcom gedcom = getGedcom();
+      if (gedcom!=null) {
+        String relative = gedcom.getOrigin().calcRelativeLocation(file);
+        if (relative !=null)
+          file = relative;
+        isRelativeChecked = true;
+      }
+    }
+    return file;
+  }
+
+  
+  public synchronized void setValue(String value) {
+
+    String old = getValue();
+
+    
+    file = value.replace('\\','/');
+    isRelativeChecked = false;
+    
+    
+    
+    
+    
+    propagatePropertyChanged(this, old);
+    
+    
+  }
+  
+  
+  public void setValue(String value, boolean updateMeta) {
+    
+    
+    setValue(value);
+    
+    
+    Property media = getParent();
+    if (!updateMeta||!media.getTag().equals("OBJE")) 
+      return;
+      
+    
+    Property parent = this;
+    if (!getMetaProperty().allows("FORM")) {
+      if (!media.getMetaProperty().allows("FORM"))
+        return;
+      parent = media;
+    }
+
+    Property form = parent.getProperty("FORM");
+    if (form==null) parent.addProperty("FORM", PropertyFile.getSuffix(file));
+    else form.setValue(PropertyFile.getSuffix(file));
+    
+    
+  }
+
+  
+  public InputStream getInputStream() throws IOException {
+    return getGedcom().getOrigin().open(file);
+  }
+  
+    public File getFile() {
+    Gedcom gedcom = getGedcom();
+    return gedcom!=null ? gedcom.getOrigin().getFile(file) : null;
+  }
+
+    public static int getMaxValueAsIconSize(boolean kb) {
+    return (kb ? 1 : 1024) * Options.getInstance().getMaxImageFileSizeKB();
+  }
+
+  
+  public String getSuffix() {
+    return getSuffix(file);
+  }
+
+  
+  public static String getSuffix(String value) {
+    
+    String result = "";
+    if (value!=null) {
+      int i = value.lastIndexOf('.');
+      if (i>=0) result = value.substring(i+1);
+    }
+    
+    return result;
+  }
+  
+} 

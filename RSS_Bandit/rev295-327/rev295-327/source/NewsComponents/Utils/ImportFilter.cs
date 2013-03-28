@@ -1,0 +1,109 @@
+using System; 
+using System.Xml; 
+using System.Xml.Xsl; 
+using System.IO; namespace  NewsComponents.Utils {
+	
+ public enum  ImportFeedFormat 
+ {
+  Unknown,
+  Bandit,
+  OCS,
+  OPML,
+  SIAM
+ } 
+ public class  ImportFilter {
+		
+  private  XmlDocument _feedList;
+ 
+  private  ImportFeedFormat _feedFormat;
+ 
+  private static readonly  string FILTER_FORMAT_OPML = "OPML";
+ 
+  private static readonly  string FILTER_FORMAT_OCS = "OCS";
+ 
+  private static readonly  string FILTER_FORMAT_SIAM = "SIAM";
+ 
+  public  ImportFilter()
+  {
+   this._feedList = null;
+   this._feedFormat = ImportFeedFormat.Unknown;
+  }
+ 
+  public  ImportFilter(XmlDocument FeedList)
+  {
+   this._feedList = FeedList;
+   this._feedFormat = this.DetectFormat();
+  }
+ 
+  public  ImportFilter(string FeedList)
+  {
+   this._feedList = new XmlDocument();
+   this._feedList.LoadXml(FeedList);
+   this._feedFormat = this.DetectFormat();
+  }
+ 
+  public  XmlDocument FeedList
+  {
+   get{return this._feedList;}
+   set
+   {
+    this._feedList = value;
+    this._feedFormat = this.DetectFormat();
+   }
+  }
+ 
+  public  ImportFeedFormat Format
+  {
+   get{return this._feedFormat;}
+   set{this._feedFormat = value;}
+  }
+ 
+  public  XslTransform GetImportXsl()
+  {
+   string _formatName;
+   if(this._feedFormat == ImportFeedFormat.Unknown)
+    this._feedFormat = this.DetectFormat();
+   switch(this._feedFormat)
+   {
+    case ImportFeedFormat.OPML:
+     _formatName = FILTER_FORMAT_OPML;
+     break;
+    case ImportFeedFormat.OCS:
+     _formatName = FILTER_FORMAT_OCS;
+     break;
+    case ImportFeedFormat.SIAM:
+     _formatName = FILTER_FORMAT_SIAM;
+     break;
+    case ImportFeedFormat.Bandit:
+    case ImportFeedFormat.Unknown:
+    default:
+     return null;
+   }
+   using (Stream _xsltStream = Resource.Manager.GetStream(String.Format("Resources.feedImportFilters.{0}.xslt", _formatName))) {
+    XslTransform _xslt = new XslTransform();
+    _xslt.Load(new XmlTextReader(_xsltStream));
+    return _xslt;
+   }
+  }
+ 
+  public  ImportFeedFormat DetectFormat()
+  {
+   if((this._feedList.DocumentElement.NamespaceURI == NamespaceCore.Feeds_v2003)
+      || (this._feedList.DocumentElement.NamespaceURI == NamespaceCore.Feeds_vCurrent)){
+    return ImportFeedFormat.Bandit;
+   }else if(this._feedList.DocumentElement.LocalName.Equals("opml")){
+    return ImportFeedFormat.OPML;
+   }else if(this._feedList.DocumentElement.NamespaceURI == "http://groups.yahoo.com/information_aggregators/2004/01/siam/"){
+    return ImportFeedFormat.SIAM;
+   }else{
+    foreach(XmlAttribute attr in this._feedList.DocumentElement.Attributes){
+     if(attr.Value.Equals("http://InternetAlchemy.org/ocs/directory#"))
+      return ImportFeedFormat.OCS;
+    }
+    return ImportFeedFormat.Unknown;
+   }
+  }
+
+	}
+
+}

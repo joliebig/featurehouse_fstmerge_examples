@@ -1,0 +1,95 @@
+
+
+package org.jmol.modelset;
+
+import org.jmol.util.Logger;
+import org.jmol.viewer.JmolConstants;
+import java.util.BitSet;
+import java.util.Hashtable;
+
+public class Molecule {
+  
+  ModelSet modelSet;
+  int moleculeIndex;
+  int modelIndex;
+  int indexInModel;
+  public int firstAtomIndex;
+  public int nAtoms;
+  int nElements;
+  int[] elementCounts = new int[JmolConstants.elementNumberMax];
+  int[] altElementCounts = new int[JmolConstants.altElementMax];
+  int elementNumberMax;
+  int altElementMax;
+  String mf;
+  public BitSet atomList;
+
+  Molecule(ModelSet modelSet, int moleculeIndex, int firstAtomIndex, BitSet atomList, int modelIndex,
+      int indexInModel) {
+    this.modelSet = modelSet;
+    this.firstAtomIndex = firstAtomIndex;
+    this.atomList = atomList;
+    this.moleculeIndex = moleculeIndex;
+    this.modelIndex = modelIndex;
+    this.indexInModel = indexInModel;
+    getElementAndAtomCount(atomList);
+    mf = getMolecularFormula();
+
+    if (Logger.debugging)
+      Logger.debug("new Molecule (" + mf + ") " + (indexInModel + 1) + "/"
+          + (modelIndex + 1));
+  }
+
+  void getElementAndAtomCount(BitSet atomList) {
+    for (int i = 0; i < modelSet.atomCount; i++)
+      if (atomList.get(i)) {
+        nAtoms++;
+        int n = modelSet.atoms[i].getAtomicAndIsotopeNumber();
+        if (n < JmolConstants.elementNumberMax) {
+          elementCounts[n]++;
+          if (elementCounts[n] == 1)
+            nElements++;
+          elementNumberMax = Math.max(elementNumberMax, n);
+        } else {
+          n = JmolConstants.altElementIndexFromNumber(n);
+          altElementCounts[n]++;
+          if (altElementCounts[n] == 1)
+            nElements++;
+          altElementMax = Math.max(altElementMax, n);
+        }
+      }
+  }
+
+  String getMolecularFormula() {
+    String mf = "";
+    String sep = "";
+    int nX;
+    for (int i = 1; i <= elementNumberMax; i++) {
+      nX = elementCounts[i];
+      if (nX != 0) {
+        mf += sep + JmolConstants.elementSymbolFromNumber(i) + " " + nX;
+        sep = " ";
+      }
+    }
+    for (int i = 1; i <= altElementMax; i++) {
+      nX = altElementCounts[i];
+      if (nX != 0) {
+        mf += sep
+            + JmolConstants.elementSymbolFromNumber(JmolConstants
+                .altElementNumberFromIndex(i)) + " " + nX;
+        sep = " ";
+      }
+    }
+    return mf;
+  }
+
+  Hashtable getInfo() {
+    Hashtable info = new Hashtable();
+    info.put("number", new Integer(moleculeIndex + 1)); 
+    info.put("modelNumber", modelSet.getModelNumberDotted(modelIndex));
+    info.put("numberInModel", new Integer(indexInModel + 1));
+    info.put("nAtoms", new Integer(nAtoms));
+    info.put("nElements", new Integer(nElements));
+    info.put("mf", mf);
+    return info;
+  }
+}  

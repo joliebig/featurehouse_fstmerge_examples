@@ -1,0 +1,116 @@
+package test.net.sourceforge.pmd.properties;
+
+import static org.junit.Assert.assertTrue;
+import net.sourceforge.pmd.PropertyDescriptor;
+import net.sourceforge.pmd.util.CollectionUtil;
+
+import org.junit.Test;
+
+public abstract class AbstractPropertyDescriptorTester {
+
+	private static final int maxCardinality = 10;
+	
+	public static final String punctuationChars  = "!@#$%^&*()_-+=[]{}\\|;:'\",.<>/?`~";
+	public static final String whitespaceChars   = " \t\n";
+	public static final String digitChars 		 = "0123456789";
+	public static final String alphaChars 		 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmniopqrstuvwxyz";
+	public static final String alphaNumericChars = digitChars + alphaChars;
+	public static final String allChars			 = punctuationChars + whitespaceChars + alphaNumericChars;
+
+	
+	
+	protected abstract Object createValue(int count);
+	
+	protected abstract PropertyDescriptor createProperty(int maxCount);
+	
+    @Test
+    public void testAsDelimitedString() {
+		
+		Object testValue = createValue(maxCardinality);
+		PropertyDescriptor pmdProp = createProperty(maxCardinality);
+		
+		String storeValue = pmdProp.asDelimitedString(testValue);
+		
+		Object returnedValue = pmdProp.valueFrom(storeValue);
+		
+		assertTrue(CollectionUtil.areEqual(returnedValue, testValue));
+	}
+	
+    @Test
+    public void testValueFrom() {
+		
+		Object testValue = createValue(1);
+		PropertyDescriptor pmdProp = createProperty(1);
+		
+		String storeValue = pmdProp.asDelimitedString(testValue);
+		
+		Object returnedValue = pmdProp.valueFrom(storeValue);
+		
+		assertTrue(CollectionUtil.areEqual(returnedValue, testValue));
+	}
+	
+	
+    @Test
+    public void testErrorFor() {
+		
+		Object testValue = createValue(1);
+		PropertyDescriptor pmdProp = createProperty(1);
+		String errorMsg = pmdProp.errorFor(testValue);
+		assertTrue(errorMsg == null);
+		
+		testValue = createValue(maxCardinality);
+		pmdProp = createProperty(maxCardinality);
+		errorMsg = pmdProp.errorFor(testValue);
+		assertTrue(errorMsg == null);
+	}
+	
+    @Test
+    public void testType() {
+		
+		PropertyDescriptor pmdProp = createProperty(1);
+
+		assertTrue(pmdProp.type() != null);
+	}
+	
+	
+	public static int randomInt() {
+		
+		int randomVal = (int) (Math.random() * 100 + 1D);
+		return randomVal + (int) (Math.random() * 100000D);
+	}
+	
+	
+	public static int randomInt(int min, int max) {
+		if (max < min) max = min;
+		int range = Math.abs(max - min);
+		int x = (int) ((range * Math.random()) + .5);
+		return x + min;
+	}
+	
+	
+	public static char randomChar(char[] characters) {
+		return characters[randomInt(0, characters.length-1)];
+	}
+	
+	
+	public static Object randomChoice(Object[] items) {
+		return items[randomInt(0, items.length-1)];
+	}
+	
+	
+	protected static final char[] filter(char[] chars, char removeChar) {
+		int count = 0;
+		for (int i=0; i<chars.length; i++) if (chars[i] == removeChar) count++;
+		char[] results = new char[chars.length - count];
+		
+		int index = 0;
+		for (int i=0; i<chars.length; i++) {
+			if (chars[i] != removeChar) results[index++] = chars[i];		
+		}
+		return results;
+	}
+
+    public static junit.framework.Test suite() {
+        return new junit.framework.JUnit4TestAdapter(AbstractPropertyDescriptorTester.class);
+    }
+}

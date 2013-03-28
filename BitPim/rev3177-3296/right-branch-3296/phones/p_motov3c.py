@@ -1,0 +1,8 @@
+"""Various descriptions of data specific to Motorola V3c phones"""
+from prototypes import *
+from prototypes_moto import *
+from p_gsm import *
+from p_moto import *
+from p_motov710 import *
+PB_TOTAL_ENTRIES=1000
+PB_RANGE=xrange(1,PB_TOTAL_ENTRIES+1)

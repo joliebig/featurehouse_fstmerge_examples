@@ -1,0 +1,83 @@
+using System; 
+using System.IO; 
+using System.Reflection; namespace  RssBandit.UnitTests {
+	
+ public class  BaseTestFixture {
+		
+  public  const string UNPACK_DESTINATION = "UnitTestResources"; 
+  public  const string WEBROOT_PATH = UNPACK_DESTINATION + @"\WebRoot"; 
+  const string RESOURCE_ROOT = "RssBandit.UnitTests.Resources."; 
+  public readonly  string FEEDS_DIR = UNPACK_DESTINATION;
+ 
+  public readonly  string APP_NAME = "RssBanditUnitTests";
+ 
+  protected  Stream GetResourceStream(string resourceName)
+  {
+   if(resourceName[0] == '.')
+    resourceName = resourceName.Substring(1);
+   return Assembly.GetExecutingAssembly().GetManifestResourceStream(RESOURCE_ROOT + resourceName);
+  }
+ 
+  protected  void UnpackResource(string resourceName, FileInfo destination)
+  {
+   using(StreamWriter writer = new StreamWriter(destination.FullName))
+   {
+    writer.Write(UnpackResource(resourceName));
+    writer.Flush();
+   }
+   destination.Attributes = FileAttributes.Temporary;
+  }
+ 
+  protected  string UnpackResource(string resourceName)
+  {
+   using(Stream resourceStream = GetResourceStream(resourceName))
+   {
+    using(StreamReader reader = new StreamReader(resourceStream))
+    {
+     return reader.ReadToEnd();
+    }
+   }
+  }
+ 
+  protected  void UnpackResourceDirectory(string directory)
+  {
+   UnpackResourceDirectory(directory, new DirectoryInfo(UNPACK_DESTINATION));
+  }
+ 
+  protected  void UnpackResourceDirectory(string directory, DirectoryInfo destination)
+  {
+   if(directory[0] == '.')
+    directory = directory.Substring(1);
+   string physicalDestination = Path.Combine(destination.FullName, directory.Replace(".", @"\"));
+   if(!Directory.Exists(physicalDestination))
+    Directory.CreateDirectory(physicalDestination);
+   directory = RESOURCE_ROOT + directory;
+   string[] resourceNames = Assembly.GetExecutingAssembly().GetManifestResourceNames();
+   foreach(string resourceFullName in resourceNames)
+   {
+    if(resourceFullName.StartsWith(directory))
+    {
+     string resourceName = resourceFullName.Substring(RESOURCE_ROOT.Length);
+     string resourceFileName = resourceFullName.Substring(directory.Length + 1);
+     UnpackResource(resourceName, new FileInfo(Path.Combine(physicalDestination, resourceFileName)));
+    }
+   }
+  }
+ 
+  protected  void DeleteDirectory(string dir)
+  {
+   if(Directory.Exists(dir))
+    DeleteDirectory(new DirectoryInfo(dir));
+  }
+ 
+  protected  void DeleteDirectory(DirectoryInfo dir)
+  {
+   foreach(FileInfo file in dir.GetFiles())
+    file.Delete();
+   foreach(DirectoryInfo subDir in dir.GetDirectories())
+    DeleteDirectory(subDir);
+  }
+
+	}
+
+}

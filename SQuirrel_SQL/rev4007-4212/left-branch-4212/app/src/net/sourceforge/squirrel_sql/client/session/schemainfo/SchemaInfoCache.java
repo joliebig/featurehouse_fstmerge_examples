@@ -1,0 +1,661 @@
+package net.sourceforge.squirrel_sql.client.session.schemainfo;
+
+import java.io.Serializable;
+import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.Collections;
+import java.util.Comparator;
+import java.util.Hashtable;
+import java.util.Iterator;
+import java.util.List;
+import java.util.Map;
+import java.util.TreeMap;
+import java.util.concurrent.CopyOnWriteArrayList;
+
+import net.sourceforge.squirrel_sql.client.gui.db.SQLAliasSchemaProperties;
+import net.sourceforge.squirrel_sql.client.gui.db.SchemaLoadInfo;
+import net.sourceforge.squirrel_sql.client.gui.db.SchemaNameLoadInfo;
+import net.sourceforge.squirrel_sql.client.gui.db.SchemaTableTypeCombination;
+import net.sourceforge.squirrel_sql.client.session.ExtendedColumnInfo;
+import net.sourceforge.squirrel_sql.client.session.ISession;
+import net.sourceforge.squirrel_sql.client.session.SessionManager;
+import net.sourceforge.squirrel_sql.fw.sql.IProcedureInfo;
+import net.sourceforge.squirrel_sql.fw.sql.ITableInfo;
+import net.sourceforge.squirrel_sql.fw.sql.TableColumnInfo;
+import net.sourceforge.squirrel_sql.fw.util.Utilities;
+import net.sourceforge.squirrel_sql.fw.util.log.ILogger;
+import net.sourceforge.squirrel_sql.fw.util.log.LoggerController;
+
+public class SchemaInfoCache implements Serializable
+{
+   private static final long serialVersionUID = 2L;
+
+   private static final ILogger s_log = 
+       LoggerController.createLogger(SchemaInfoCache.class);
+
+   private List<String> _catalogs = new ArrayList<String>();
+   private List<String> _schemas = new ArrayList<String>();
+
+   private TreeMap<CaseInsensitiveString, String> _keywords = 
+       new TreeMap<CaseInsensitiveString, String>();
+   private TreeMap<CaseInsensitiveString, String> _dataTypes = 
+       new TreeMap<CaseInsensitiveString, String>();
+   private Map<CaseInsensitiveString, String> _functions = 
+       Collections.synchronizedMap(new TreeMap<CaseInsensitiveString, String>());
+
+   
+   
+   
+   
+   private TreeMap<CaseInsensitiveString, String> _internalTableNameTreeMap =
+       new TreeMap<CaseInsensitiveString, String>();
+   
+   private Map<CaseInsensitiveString, String> _tableNames = 
+       Collections.synchronizedMap(_internalTableNameTreeMap);
+   
+
+   
+   private CopyOnWriteArrayList<ITableInfo> _iTableInfos =
+       new CopyOnWriteArrayList<ITableInfo>();
+   
+   private Hashtable<CaseInsensitiveString, List<ITableInfo>> _tableInfosBySimpleName = 
+       new Hashtable<CaseInsensitiveString, List<ITableInfo>>();
+
+   private Map<CaseInsensitiveString, List<ExtendedColumnInfo>> _extendedColumnInfosByTableName = 
+       Collections.synchronizedMap(new TreeMap<CaseInsensitiveString, List<ExtendedColumnInfo>>());
+   
+   private Map<CaseInsensitiveString, List<ExtendedColumnInfo>> _extColumnInfosByColumnName = 
+       Collections.synchronizedMap(new TreeMap<CaseInsensitiveString, List<ExtendedColumnInfo>>());
+
+
+   private Map<CaseInsensitiveString, String> _procedureNames = 
+       Collections.synchronizedMap(new TreeMap<CaseInsensitiveString, String>());
+   
+   private Map<IProcedureInfo, IProcedureInfo> _iProcedureInfos = 
+       Collections.synchronizedMap(new TreeMap<IProcedureInfo, IProcedureInfo>());
+   
+   private Hashtable<CaseInsensitiveString, List<IProcedureInfo>> _procedureInfosBySimpleName = 
+       new Hashtable<CaseInsensitiveString, List<IProcedureInfo>>();
+   
+   
+
+   private SQLAliasSchemaProperties _schemaPropsCacheIsBasedOn;
+
+   private transient String[] _viewTableTypesCacheable;
+   private transient String[] _tabelTableTypesCacheable;
+   
+
+   private transient ISession _session = null;
+
+
+   void setSession(ISession session)
+   {
+      _session = session;
+      initTypes();
+   }
+
+
+   boolean loadSchemaIndependentMetaData()
+   {
+      return _session.getAlias().getSchemaProperties().loadSchemaIndependentMetaData(_schemaPropsCacheIsBasedOn);
+   }
+
+   private SchemaLoadInfo[] getAllSchemaLoadInfos()
+   {
+      SQLAliasSchemaProperties schemaProps =  
+          _session.getAlias().getSchemaProperties();
+      SchemaLoadInfo[] schemaLoadInfos = 
+          schemaProps.getSchemaLoadInfos(_schemaPropsCacheIsBasedOn, 
+                                         _tabelTableTypesCacheable, 
+                                         _viewTableTypesCacheable);
+      SessionManager sessionMgr = _session.getApplication().getSessionManager();
+      boolean allSchemasAllowed = sessionMgr.areAllSchemasAllowed(_session);
+      
+      if(   1 == schemaLoadInfos.length
+         && null == schemaLoadInfos[0].schemaName
+         && false == allSchemasAllowed)
+      {
+         if(false == allSchemasAllowed)
+         {
+            String[] allowedSchemas = sessionMgr.getAllowedSchemas(_session);
+
+            ArrayList<SchemaLoadInfo> ret = new ArrayList<SchemaLoadInfo>();
+
+            for (int i = 0; i < allowedSchemas.length; i++)
+            {
+               SchemaLoadInfo buf = (SchemaLoadInfo) Utilities.cloneObject(
+                     schemaLoadInfos[0], getClass().getClassLoader());
+               buf.schemaName = allowedSchemas[i];
+               
+               ret.add(buf);
+            }
+            schemaLoadInfos = ret.toArray(new SchemaLoadInfo[ret.size()]);
+         }
+      }
+      return schemaLoadInfos;
+   }
+
+   SchemaLoadInfo[] getMatchingSchemaLoadInfos(String schemaName)
+   {
+      return getMatchingSchemaLoadInfos(schemaName, null);
+   }
+
+   SchemaLoadInfo[] getMatchingSchemaLoadInfos(String schemaName, String[] tableTypes)
+   {
+      if(null == schemaName)
+      {
+         return getAllSchemaLoadInfos();
+      }
+
+      SchemaLoadInfo[] schemaLoadInfos = getAllSchemaLoadInfos();
+      for (int i = 0; i < schemaLoadInfos.length; i++)
+      {
+         if(null == schemaLoadInfos[i].schemaName || schemaLoadInfos[i].schemaName.equals(schemaName))
+         {
+            
+            
+            
+            schemaLoadInfos[i].schemaName = schemaName;
+            if(null != tableTypes)
+            {
+               SchemaLoadInfo buf = (SchemaLoadInfo) Utilities.cloneObject(
+                     schemaLoadInfos[i], getClass().getClassLoader());
+               buf.tableTypes = tableTypes;
+               return new SchemaLoadInfo[]{buf};
+            }
+
+            return new SchemaLoadInfo[]{schemaLoadInfos[i]};
+         }
+      }
+      throw new IllegalArgumentException("Unknown Schema " + schemaName);
+   }
+
+   private void initTypes()
+   {
+      ArrayList<String> tableTypeCandidates = new ArrayList<String>();
+      tableTypeCandidates.add("TABLE");
+      tableTypeCandidates.add("SYSTEM TABLE");
+
+      ArrayList<String> viewTypeCandidates = new ArrayList<String>();
+      viewTypeCandidates.add("VIEW");
+
+      try
+      {
+         ArrayList<String> availableBuf = new ArrayList<String>();
+         String[] buf = _session.getSQLConnection().getSQLMetaData().getTableTypes();
+         availableBuf.addAll(Arrays.asList(buf));
+
+         for(Iterator<String> i=tableTypeCandidates.iterator();i.hasNext();)
+         {
+            if(false == availableBuf.contains(i.next()))
+            {
+               i.remove();
+            }
+         }
+
+         for(Iterator<String> i=viewTypeCandidates.iterator();i.hasNext();)
+         {
+            if(false == availableBuf.contains(i.next()))
+            {
+               i.remove();
+            }
+         }
+      }
+      catch (SQLException e)
+      {
+         s_log.error("Could not get table types", e);
+      }
+
+      _tabelTableTypesCacheable = tableTypeCandidates.toArray(new String[tableTypeCandidates.size()]);
+      _viewTableTypesCacheable = viewTypeCandidates.toArray(new String[viewTypeCandidates.size()]);
+   }
+
+   public boolean isCachedTableType(String type)
+   {
+      boolean found = false;
+
+      for (int i = 0; i < _viewTableTypesCacheable.length; i++)
+      {
+         if(_viewTableTypesCacheable[i].equals(type))
+         {
+            found = true;
+            break;
+         }
+      }
+
+      for (int i = 0; i < _tabelTableTypesCacheable.length; i++)
+      {
+         if(_tabelTableTypesCacheable[i].equals(type))
+         {
+            found = true;
+            break;
+         }
+      }
+
+      return found;
+   }
+
+   static boolean containsType(String[] types, String type)
+   {
+      if(null == types)
+      {
+         return true;
+      }
+
+      for (int i = 0; i < types.length; i++)
+      {
+         if(type.trim().equalsIgnoreCase(types[i]))
+         {
+            return true;
+         }
+      }
+      return false;
+   }
+
+   
+   public void writeToTableCache(ITableInfo[] infos) {
+      for (ITableInfo info : infos) {
+         String tableName = info.getSimpleName();
+         CaseInsensitiveString ciTableName = new CaseInsensitiveString(tableName);
+         _tableNames.put(ciTableName, tableName);
+         
+         List<ITableInfo> aITabInfos = _tableInfosBySimpleName.get(ciTableName);
+         if(null == aITabInfos)
+         {
+            aITabInfos = new ArrayList<ITableInfo>();
+            _tableInfosBySimpleName.put(ciTableName, aITabInfos);
+         }
+         aITabInfos.add(info);         
+      }
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      
+      int currSize = _iTableInfos.size();
+      ITableInfo[] tableArr = 
+         _iTableInfos.toArray(new ITableInfo[currSize+infos.length]);
+      
+      for (int i = 0; i < infos.length; i++) {
+         tableArr[currSize + i] = infos[i];
+      }
+      
+      
+      Arrays.sort(tableArr, new TableInfoSimpleNameComparator());
+      _iTableInfos = new CopyOnWriteArrayList<ITableInfo>(tableArr);
+   }
+   
+   
+   public void writeToTableCache(ITableInfo info)
+   {
+      writeToTableCache(new ITableInfo[] { info });      
+   }
+
+
+   public void writeToProcedureCache(IProcedureInfo procedure)
+   {
+      String proc = procedure.getSimpleName();
+      if (proc.length() > 0)
+      {
+         CaseInsensitiveString ciProc = new CaseInsensitiveString(proc);
+         _procedureNames.put(ciProc ,proc);
+
+         List<IProcedureInfo> aIProcInfos = _procedureInfosBySimpleName.get(ciProc);
+         if(null == aIProcInfos)
+         {
+            aIProcInfos = new ArrayList<IProcedureInfo>();
+            _procedureInfosBySimpleName.put(ciProc, aIProcInfos);
+         }
+         aIProcInfos.add(procedure);
+      }
+      _iProcedureInfos.put(procedure, procedure);
+   }
+
+
+   public void writeColumsToCache(TableColumnInfo[] infos, CaseInsensitiveString simpleTableName)
+   {
+      ArrayList<ExtendedColumnInfo> ecisInTable = new ArrayList<ExtendedColumnInfo>();
+      for (int i = 0; i < infos.length; i++)
+      {
+         ExtendedColumnInfo eci = new ExtendedColumnInfo(infos[i], simpleTableName.toString());
+         ecisInTable.add(eci);
+
+         CaseInsensitiveString ciColName = new CaseInsensitiveString(eci.getColumnName());
+         List<ExtendedColumnInfo> ecisInColName = _extColumnInfosByColumnName.get(ciColName);
+         if(null == ecisInColName)
+         {
+            ecisInColName = new ArrayList<ExtendedColumnInfo>();
+            _extColumnInfosByColumnName.put(ciColName, ecisInColName);
+         }
+         ecisInColName.add(eci);
+      }
+
+      
+      
+      
+      CaseInsensitiveString imutableString = new CaseInsensitiveString(simpleTableName.toString());
+      _extendedColumnInfosByTableName.put(imutableString, ecisInTable);
+   }
+
+
+   void initialLoadDone()
+   {
+      
+      _schemaPropsCacheIsBasedOn = null;
+   }
+
+   void prepareSerialization()
+   {
+      _schemaPropsCacheIsBasedOn = _session.getAlias().getSchemaProperties();
+
+      if(false == _schemaPropsCacheIsBasedOn.isCacheSchemaIndependentMetaData())
+      {
+         clearSchemaIndependentData();
+      }
+
+      if(SQLAliasSchemaProperties.GLOBAL_STATE_LOAD_ALL_CACHE_NONE == _schemaPropsCacheIsBasedOn.getGlobalState())
+      {
+         clearAllSchemaDependentData();
+      }
+      else if(SQLAliasSchemaProperties.GLOBAL_STATE_SPECIFY_SCHEMAS == _schemaPropsCacheIsBasedOn.getGlobalState())
+      {
+         SchemaTableTypeCombination[] tableTypeCombis =
+            _schemaPropsCacheIsBasedOn.getAllSchemaTableTypeCombinationsNotToBeCached(_tabelTableTypesCacheable, _viewTableTypesCacheable);
+
+         for (int i = 0; i < tableTypeCombis.length; i++)
+         {
+            clearTables(null, tableTypeCombis[i].schemaName, null, tableTypeCombis[i].types);
+         }
+
+         String[] procedureSchemas = _schemaPropsCacheIsBasedOn.getAllSchemaProceduresNotToBeCached();
+         for (int i = 0; i < procedureSchemas.length; i++)
+         {
+            clearStoredProcedures(null, procedureSchemas[i], null);
+         }
+
+
+      }
+
+   }
+
+   void clearAll()
+   {
+      clearSchemaIndependentData();
+
+
+      clearAllSchemaDependentData();
+
+   }
+
+   private void clearAllSchemaDependentData()
+   {
+      _tableNames.clear();
+      synchronized(_iTableInfos) {
+          _iTableInfos.clear();
+      }
+      _tableInfosBySimpleName.clear();
+
+      _extColumnInfosByColumnName.clear();
+      _extendedColumnInfosByTableName.clear();
+
+
+      _procedureNames.clear();
+      _iProcedureInfos.clear();
+      _procedureInfosBySimpleName.clear();
+
+      _schemas.clear();
+
+   }
+
+   private void clearSchemaIndependentData()
+   {
+      _catalogs.clear();
+
+      _keywords.clear();
+      _dataTypes.clear();
+      _functions.clear();
+   }
+
+   void clearTables(String catalogName, String schemaName, String simpleName, String[] types)
+   {
+      for(Iterator<ITableInfo> i = _iTableInfos.iterator(); i.hasNext();)
+      {
+         ITableInfo ti = i.next();
+
+         boolean matches = matchesMetaString(ti.getCatalogName(), catalogName);
+         matches &= matchesMetaString(ti.getSchemaName(), schemaName);
+         matches &= matchesMetaString(ti.getSimpleName(), simpleName);
+
+         if(null != types)
+         {
+            boolean found = false;
+            for (int j = 0; j < types.length; j++)
+            {
+               if(types[j].equals(ti.getType()))
+               {
+                  found = true;
+                  break;
+               }
+            }
+
+            matches &= found;
+         }
+
+         if(matches)
+         {
+             
+             
+             _iTableInfos.remove(ti);
+
+            CaseInsensitiveString ciSimpleName = new CaseInsensitiveString(ti.getSimpleName());
+            List<ITableInfo> tableInfos = _tableInfosBySimpleName.get(ciSimpleName);
+            tableInfos.remove(ti);
+            if(0 == tableInfos.size())
+            {
+               _tableInfosBySimpleName.remove(ciSimpleName);
+               _tableNames.remove(ciSimpleName);
+            }
+
+            List<ExtendedColumnInfo> ecisInTable = _extendedColumnInfosByTableName.get(ciSimpleName);
+
+            if(null == ecisInTable)
+            {
+               
+               continue;
+            }
+
+            for(Iterator<ExtendedColumnInfo> j=ecisInTable.iterator();j.hasNext();)
+            {
+               ExtendedColumnInfo eci = j.next();
+
+               String qn1 = ti.getCatalogName() + "." + ti.getSchemaName() + "." + ti.getSimpleName();
+               String qn2 = eci.getCatalog() + "." + eci.getSchema() + "." + eci.getSimpleTableName();
+               if(new CaseInsensitiveString(qn1).equals(new CaseInsensitiveString(qn2)))
+               {
+                  j.remove();
+               }
+
+               CaseInsensitiveString ciColName = new CaseInsensitiveString(eci.getColumnName());
+               List<ExtendedColumnInfo> ecisInColumn =  _extColumnInfosByColumnName.get(ciColName);
+
+               if (ecisInColumn != null) {
+                   ecisInColumn.remove(eci);
+    
+                   if (0 == ecisInColumn.size())
+                   {
+                      _extColumnInfosByColumnName.remove(ciColName);
+                   }
+               } else {
+                   if (s_log.isDebugEnabled()) {
+                       s_log.debug(
+                           "clearTables: no entries in " +
+                           "_extColumnInfosByColumnName for column - "+ciColName);
+                   }
+               }
+            }
+
+            if(0 == ecisInTable.size())
+            {
+               _extendedColumnInfosByTableName.remove(ciSimpleName);
+            }
+         }
+      }
+
+   }
+
+   void clearStoredProcedures(String catalogName, String schemaName, String simpleName)
+   {
+      for(Iterator<IProcedureInfo> i = _iProcedureInfos.keySet().iterator(); i.hasNext();)
+      {
+         IProcedureInfo pi = i.next();
+
+
+         boolean matches = matchesMetaString(pi.getCatalogName(), catalogName);
+         matches &= matchesMetaString(pi.getSchemaName(), schemaName);
+         matches &= matchesMetaString(pi.getSimpleName(), simpleName);
+
+
+         if(matches)
+         {
+            i.remove();
+
+            CaseInsensitiveString ciSimpleName = new CaseInsensitiveString(pi.getSimpleName());
+            List<IProcedureInfo> procedureInfos = _procedureInfosBySimpleName.get(ciSimpleName);
+            procedureInfos.remove(pi);
+            if(0 == procedureInfos.size())
+            {
+               _procedureInfosBySimpleName.remove(ciSimpleName);
+               _procedureNames.remove(ciSimpleName);
+            }
+
+         }
+      }
+   }
+
+
+   private boolean matchesMetaString(String s, String toCheck)
+   {
+      if(null == s || null == toCheck)
+      {
+         return true;
+      }
+
+      return s.equals(toCheck);
+   }
+
+   SchemaNameLoadInfo getSchemaNameLoadInfo()
+   {
+      return _session.getAlias().getSchemaProperties().getSchemaNameLoadInfo(_schemaPropsCacheIsBasedOn);
+   }
+
+   void writeCatalogs(String[] catalogs)
+   {
+      this._catalogs.clear();
+      this._catalogs.addAll(Arrays.asList(catalogs));
+   }
+
+   void writeSchemas(String[] schemasToWrite)
+   {
+      _schemas.clear();
+      _schemas.addAll(Arrays.asList(schemasToWrite));
+   }
+
+
+   void writeKeywords(Hashtable<CaseInsensitiveString, String> keywordsBuf)
+   {
+      _keywords.clear();
+      _keywords.putAll(keywordsBuf);
+   }
+
+
+   void writeDataTypes(Hashtable<CaseInsensitiveString, String> dataTypesBuf)
+   {
+      _dataTypes.clear();
+      _dataTypes.putAll(dataTypesBuf);
+   }
+
+   void writeFunctions(Hashtable<CaseInsensitiveString, String> functionsBuf)
+   {
+      _functions.clear();
+      _functions.putAll(functionsBuf);
+   }
+
+   List<String> getCatalogsForReadOnly()
+   {
+      return _catalogs;
+   }
+
+   List<String> getSchemasForReadOnly()
+   {
+      return _schemas;
+   }
+
+   TreeMap<CaseInsensitiveString, String> getKeywordsForReadOnly()
+   {
+      return _keywords;
+   }
+
+   TreeMap<CaseInsensitiveString, String> getDataTypesForReadOnly()
+   {
+      return _dataTypes;
+   }
+
+   Map<CaseInsensitiveString, String> getFunctionsForReadOnly()
+   {
+      return _functions;
+   }
+
+   Map<CaseInsensitiveString, String> getTableNamesForReadOnly()
+   {
+      return _internalTableNameTreeMap;
+   }
+
+   List<ITableInfo> getITableInfosForReadOnly()
+   {
+      return _iTableInfos;
+   }
+
+   Hashtable<CaseInsensitiveString, List<ITableInfo>> getTableInfosBySimpleNameForReadOnly()
+   {
+      return _tableInfosBySimpleName;
+   }
+
+   Map<CaseInsensitiveString, List<ExtendedColumnInfo>> getExtendedColumnInfosByTableNameForReadOnly()
+   {
+      return _extendedColumnInfosByTableName;
+   }
+
+   Map<CaseInsensitiveString, List<ExtendedColumnInfo>> getExtColumnInfosByColumnNameForReadOnly()
+   {
+      return _extColumnInfosByColumnName;
+   }
+
+   Map<CaseInsensitiveString, String> getProcedureNamesForReadOnly()
+   {
+      return _procedureNames;
+   }
+
+   Map<IProcedureInfo, IProcedureInfo> getIProcedureInfosForReadOnly()
+   {
+      return _iProcedureInfos;
+   }
+
+   
+   private class TableInfoSimpleNameComparator implements
+         Comparator<ITableInfo> {
+      public int compare(ITableInfo o1, ITableInfo o2) {
+         return o1.getSimpleName().compareTo(o2.getSimpleName());
+      }
+   }
+
+}

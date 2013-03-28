@@ -1,0 +1,12 @@
+if __debug__:
+    try:
+        import jarow as j
+    except:
+        print "Using (slow) Python version of Jaro/Winkler.  Build C module in native/strings."
+        import jarowpy as j
+    jarow=j.jarow
+    del j
+else:
+    import jarow as j
+    jarow=j.jarow
+    del j

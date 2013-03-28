@@ -1,0 +1,28 @@
+using System;
+using System.Windows.Forms;
+using System.Collections.Generic;
+namespace RssBandit.UIServices
+{
+ public interface IAddInPackage
+ {
+  void Load(IServiceProvider serviceProvider);
+  void Unload();
+ }
+ public interface IAddInPackageConfiguration
+ {
+  bool HasConfigurationUI { get; }
+  void ShowConfigurationUI(IWin32Window parent);
+ }
+ public interface IAddIn: IDisposable
+ {
+  string Location { get; }
+  string Name { get; }
+        IList<IAddInPackage> AddInPackages { get; }
+ }
+ public interface IAddInManager
+ {
+  IAddIn Load(string fileName);
+  void Unload(IAddIn addIn);
+        IEnumerable<IAddIn> AddIns { get; }
+ }
+}

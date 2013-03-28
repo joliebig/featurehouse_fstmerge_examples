@@ -1,0 +1,430 @@
+
+
+package org.jfree.experimental.chart.plot.dial;
+
+import java.awt.BasicStroke;
+import java.awt.Color;
+import java.awt.Font;
+import java.awt.Graphics2D;
+import java.awt.Paint;
+import java.awt.Stroke;
+import java.awt.geom.Arc2D;
+import java.awt.geom.Line2D;
+import java.awt.geom.Point2D;
+import java.awt.geom.Rectangle2D;
+import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
+import java.io.Serializable;
+
+import org.jfree.io.SerialUtilities;
+import org.jfree.text.TextUtilities;
+import org.jfree.ui.TextAnchor;
+import org.jfree.util.PaintUtilities;
+import org.jfree.util.PublicCloneable;
+
+
+public class StandardDialScale extends AbstractDialLayer implements DialScale, 
+        DialLayer, Cloneable, PublicCloneable, Serializable {
+    
+    
+    private double lowerBound;
+    
+    
+    private double upperBound;
+    
+    
+    private double startAngle;
+    
+    
+    private double extent;
+    
+    
+    private double tickRadius;
+
+    
+    private double majorTickIncrement;
+
+    
+    private double majorTickLength;    
+    
+    
+    private transient Paint majorTickPaint;
+    
+    
+    private transient Stroke majorTickStroke;
+
+    
+    private int minorTickCount;
+    
+    
+    private double minorTickLength;
+    
+    
+    private double tickLabelOffset;
+    
+    
+    private Font tickLabelFont;
+    
+    
+    private boolean tickLabelsVisible;
+    
+    
+    private boolean firstTickLabelVisible;
+    
+    
+    private transient Paint tickLabelPaint;
+    
+    
+    public StandardDialScale() {
+        this(0.0, 100.0, 175, -170);
+    }
+    
+    
+    public StandardDialScale(double lowerBound, double upperBound, 
+            double startAngle, double extent) {
+        this.startAngle = startAngle;
+        this.extent = extent;
+        this.lowerBound = lowerBound;
+        this.upperBound = upperBound;
+        this.majorTickPaint = Color.black;
+        this.majorTickStroke = new BasicStroke(3.0f);
+        this.tickLabelFont = new Font("Dialog", Font.BOLD, 16);
+        this.tickLabelPaint = Color.blue;
+        this.minorTickCount = 4;
+        this.minorTickLength = 0.02;
+        this.tickLabelOffset = 0.10;
+        this.majorTickIncrement = 10.0;
+        this.tickRadius = 0.70;
+        this.tickLabelsVisible = true;
+        this.firstTickLabelVisible = true;
+    }
+    
+    
+    public double getStartAngle() {
+        return this.startAngle;
+    }
+    
+    
+    public void setStartAngle(double angle) {
+        this.startAngle = angle;
+        notifyListeners(new DialLayerChangeEvent(this));
+    }
+    
+    
+    public double getExtent() {
+        return this.extent;
+    }
+    
+    
+    public void setExtent(double extent) {
+        this.extent = extent;
+        notifyListeners(new DialLayerChangeEvent(this));
+    }
+    
+    
+    public double getTickRadius() {
+        return this.tickRadius;
+    }
+    
+    
+    public void setTickRadius(double radius) {
+        
+        this.tickRadius = radius;
+        notifyListeners(new DialLayerChangeEvent(this));
+    }
+    
+    
+    public double getMajorTickIncrement() {
+        return this.majorTickIncrement;
+    }
+    
+    
+    public void setMajorTickIncrement(double increment) {
+        
+        this.majorTickIncrement = increment;
+        notifyListeners(new DialLayerChangeEvent(this));
+    }
+    
+    
+    public double getMajorTickLength() {
+        return this.majorTickLength;
+    }
+    
+    
+    public void setMajorTickLength(double length) {
+        
+        this.majorTickLength = length;
+        notifyListeners(new DialLayerChangeEvent(this));
+    }
+    
+    
+    public Paint getMajorTickPaint() {
+        return this.majorTickPaint;
+    }
+    
+    
+    public void setMajorTickPaint(Paint paint) {
+        if (paint == null) {
+            throw new IllegalArgumentException("Null 'paint' argument.");
+        }
+        this.majorTickPaint = paint;
+        notifyListeners(new DialLayerChangeEvent(this));
+    }
+    
+    
+    public Stroke getMajorTickStroke() {
+        return this.majorTickStroke;
+    }
+    
+    
+    public void setMajorTickStroke(Stroke stroke) {
+        if (stroke == null) {
+            throw new IllegalArgumentException("Null 'stroke' argument.");
+        }
+        this.majorTickStroke = stroke;
+        notifyListeners(new DialLayerChangeEvent(this));
+    }
+    
+    
+    public int getMinorTickCount() {
+        return this.minorTickCount;
+    }
+    
+    
+    public void setMinorTickCount(int count) {
+        
+        this.minorTickCount = count;
+        notifyListeners(new DialLayerChangeEvent(this));
+    }
+    
+    
+    public double getMinorTickLength() {
+        return this.minorTickLength;
+    }
+    
+    
+    public void setMinorTickLength(double length) {
+        
+        this.minorTickLength = length;
+        notifyListeners(new DialLayerChangeEvent(this));
+    }
+    
+    
+    public double getTickLabelOffset() {
+        return this.tickLabelOffset;
+    }
+    
+    
+    public void setTickLabelOffset(double offset) {
+        this.tickLabelOffset = offset;
+        notifyListeners(new DialLayerChangeEvent(this));
+    }
+    
+    
+    public Font getTickLabelFont() {
+        return this.tickLabelFont;
+    }
+    
+    
+    public void setTickLabelFont(Font font) {
+        if (font == null) {
+            throw new IllegalArgumentException("Null 'font' argument.");
+        }
+        this.tickLabelFont = font;
+        notifyListeners(new DialLayerChangeEvent(this));
+    }
+    
+    
+    public Paint getTickLabelPaint() {
+        return this.tickLabelPaint;
+    }
+    
+    
+    public void setTickLabelPaint(Paint paint) {
+        
+        this.tickLabelPaint = paint;
+        notifyListeners(new DialLayerChangeEvent(this));
+    }
+    
+    
+    public boolean getTickLabelsVisible() {
+        return this.tickLabelsVisible;
+    }
+    
+    
+    public void setTickLabelsVisible(boolean visible) {
+        this.tickLabelsVisible = visible;
+        notifyListeners(new DialLayerChangeEvent(this));
+    }
+    
+    
+    public boolean getFirstTickLabelVisible() {
+        return this.firstTickLabelVisible;
+    }
+    
+    
+    public void setFirstTickLabelVisible(boolean visible) {
+        this.firstTickLabelVisible = visible;
+        notifyListeners(new DialLayerChangeEvent(this));
+    }
+    
+    
+    public boolean isClippedToWindow() {
+        return true;
+    }
+    
+    
+    public void draw(Graphics2D g2, DialPlot plot, Rectangle2D frame, 
+            Rectangle2D view) {
+        
+        Rectangle2D arcRect = DialPlot.rectangleByRadius(frame, 
+                this.tickRadius, this.tickRadius);
+        Rectangle2D arcRectInner = DialPlot.rectangleByRadius(frame, 
+                this.tickRadius - this.minorTickLength, 
+                this.tickRadius - this.minorTickLength);
+        Rectangle2D arcRectForLabels = DialPlot.rectangleByRadius(frame, 
+                this.tickRadius - this.tickLabelOffset, 
+                this.tickRadius - this.tickLabelOffset);
+        
+        boolean firstLabel = true;
+        
+        Arc2D arc = new Arc2D.Double();
+        for (double v = this.lowerBound; v <= this.upperBound; 
+                v += this.majorTickIncrement) {
+            arc.setArc(arcRect, this.startAngle, valueToAngle(v) 
+                    - this.startAngle, Arc2D.OPEN);
+            Point2D pt0 = arc.getEndPoint();
+            arc.setArc(arcRectInner, this.startAngle, valueToAngle(v) 
+                    - this.startAngle, Arc2D.OPEN);
+            Point2D pt1 = arc.getEndPoint();
+            g2.setPaint(this.majorTickPaint);
+            g2.setStroke(this.majorTickStroke);
+            g2.draw(new Line2D.Double(pt0, pt1));
+            arc.setArc(arcRectForLabels, this.startAngle, valueToAngle(v) 
+                    - this.startAngle, Arc2D.OPEN);
+            Point2D pt2 = arc.getEndPoint();
+            
+            if (tickLabelsVisible) {
+                if (!firstLabel || this.firstTickLabelVisible) {
+                    g2.setFont(this.tickLabelFont);
+                    TextUtilities.drawAlignedString(String.valueOf(v), g2, 
+                            (float) pt2.getX(), (float) pt2.getY(), 
+                            TextAnchor.CENTER);
+                }
+            }
+            firstLabel = false;
+            
+            
+            if (this.minorTickCount > 0) {
+                double minorTickIncrement = this.majorTickIncrement 
+                        / (this.minorTickCount + 1);
+                for (int i = 0; i < this.minorTickCount; i++) {
+                    double vv = v + ((i + 1) * minorTickIncrement);
+                    if (vv >= this.upperBound) {
+                        break;
+                    }
+                    double angle = valueToAngle(vv);
+                   
+                    arc.setArc(arcRect, this.startAngle, angle 
+                            - this.startAngle, Arc2D.OPEN);
+                    pt0 = arc.getEndPoint();
+                    arc.setArc(arcRectInner, this.startAngle, angle 
+                            - this.startAngle, Arc2D.OPEN);
+                    Point2D pt3 = arc.getEndPoint();
+                    g2.setStroke(new BasicStroke(1.0f));
+                    g2.draw(new Line2D.Double(pt0, pt3));
+                }
+            }
+            
+        }
+    }
+    
+    
+    public double valueToAngle(double value) {
+        double range = this.upperBound - this.lowerBound;
+        double unit = this.extent / range;
+        return this.startAngle + unit * (value - this.lowerBound);        
+    }
+
+    public double angleToValue(double angle) {
+        return Double.NaN;  
+    }
+
+    
+    public boolean equals(Object obj) {
+        if (obj == this) {
+            return true;
+        }    
+        if (!(obj instanceof StandardDialScale)) {
+            return false;
+        }
+        StandardDialScale that = (StandardDialScale) obj;
+        if (this.lowerBound != that.lowerBound) {
+            return false;
+        }
+        if (this.upperBound != that.upperBound) {
+            return false;
+        }
+        if (this.startAngle != that.startAngle) {
+            return false;
+        }
+        if (this.extent != that.extent) {
+            return false;
+        }
+        if (this.tickRadius != that.tickRadius) {
+            return false;
+        }
+        if (this.majorTickIncrement != that.majorTickIncrement) {
+            return false;
+        }
+        if (this.majorTickLength != that.majorTickLength) {
+            return false;
+        }
+        if (!PaintUtilities.equal(this.majorTickPaint, that.majorTickPaint)) {
+            return false;
+        }
+        if (!this.majorTickStroke.equals(that.majorTickStroke)) {
+            return false;
+        }
+        if (this.minorTickCount != that.minorTickCount) {
+            return false;
+        }
+        if (this.minorTickLength != that.minorTickLength) {
+            return false;
+        }
+        if (this.tickLabelOffset != that.tickLabelOffset) {
+            return false;
+        }
+        if (!this.tickLabelFont.equals(that.tickLabelFont)) {
+            return false;
+        }
+        if (!PaintUtilities.equal(this.tickLabelPaint, that.tickLabelPaint)) {
+            return false;
+        }
+        return true;
+    }
+
+    
+    public Object clone() throws CloneNotSupportedException { 
+        return super.clone();
+    }
+    
+    
+    private void writeObject(ObjectOutputStream stream) throws IOException {
+        stream.defaultWriteObject();
+        SerialUtilities.writePaint(this.majorTickPaint, stream);
+        SerialUtilities.writeStroke(this.majorTickStroke, stream);
+        SerialUtilities.writePaint(this.tickLabelPaint, stream);
+    }
+
+    
+    private void readObject(ObjectInputStream stream) 
+            throws IOException, ClassNotFoundException {
+        stream.defaultReadObject();
+        this.majorTickPaint = SerialUtilities.readPaint(stream);
+        this.majorTickStroke = SerialUtilities.readStroke(stream);
+        this.tickLabelPaint = SerialUtilities.readPaint(stream);
+    }
+
+}

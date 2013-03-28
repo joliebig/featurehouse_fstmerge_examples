@@ -1,0 +1,125 @@
+package net.sourceforge.squirrel_sql.plugins.dbcopy.commands;
+
+
+
+import java.sql.SQLException;
+import java.util.ArrayList;
+import java.util.List;
+
+import net.sourceforge.squirrel_sql.client.gui.ProgessCallBackDialog;
+import net.sourceforge.squirrel_sql.client.session.IObjectTreeAPI;
+import net.sourceforge.squirrel_sql.client.session.ISession;
+import net.sourceforge.squirrel_sql.fw.sql.DatabaseObjectType;
+import net.sourceforge.squirrel_sql.fw.sql.IDatabaseObjectInfo;
+import net.sourceforge.squirrel_sql.fw.sql.ITableInfo;
+import net.sourceforge.squirrel_sql.fw.sql.SQLDatabaseMetaData;
+import net.sourceforge.squirrel_sql.fw.sql.SQLUtilities;
+import net.sourceforge.squirrel_sql.fw.util.ICommand;
+import net.sourceforge.squirrel_sql.fw.util.StringManager;
+import net.sourceforge.squirrel_sql.fw.util.StringManagerFactory;
+import net.sourceforge.squirrel_sql.fw.util.log.ILogger;
+import net.sourceforge.squirrel_sql.fw.util.log.LoggerController;
+import net.sourceforge.squirrel_sql.plugins.dbcopy.DBCopyPlugin;
+import net.sourceforge.squirrel_sql.plugins.dbcopy.util.DBUtil;
+
+public class CopyTableCommand implements ICommand
+{
+    
+    private ISession _session;
+    
+    
+    private final DBCopyPlugin _plugin;
+    
+    
+    private final static ILogger log = 
+                         LoggerController.createLogger(CopyTableCommand.class);
+    
+    
+    private static final StringManager s_stringMgr =
+        StringManagerFactory.getStringManager(CopyTableCommand.class);   
+    
+    static interface i18n {
+        
+        
+        String PROGRESS_DIALOG_TITLE = 
+            s_stringMgr.getString("CopyTablesCommand.progressDialogTitle");
+        
+        
+        String LOADING_PREFIX = 
+            s_stringMgr.getString("CopyTablesCommand.loadingPrefix");        
+        
+    }
+    
+    
+    public CopyTableCommand(ISession session, DBCopyPlugin plugin)
+    {
+        super();
+        _session = session;
+        _plugin = plugin;
+    }
+    
+    
+    public void execute()
+    {
+        IObjectTreeAPI api = _session.getObjectTreeAPIOfActiveSessionWindow();
+        if (api != null) {
+            IDatabaseObjectInfo[] dbObjs = api.getSelectedDatabaseObjects();
+            if (DatabaseObjectType.TABLE_TYPE_DBO.equals(dbObjs[0].getDatabaseObjectType())) {
+            	String catalog = dbObjs[0].getCatalogName();
+            	String schema = dbObjs[0].getSchemaName();
+            	if (log.isDebugEnabled()) {
+	            	log.debug("CopyTableCommand.execute: catalog="+catalog);
+	            	log.debug("CopyTableCommand.execute: schema="+schema);
+            	}	
+            	dbObjs = DBUtil.getTables(_session, catalog, schema, null);
+            	for (int i = 0; i < dbObjs.length; i++) {
+            		ITableInfo info = (ITableInfo)dbObjs[i];
+            		if (log.isDebugEnabled()) {
+            			log.debug("dbObj["+i+"] = "+info.getSimpleName());
+            		}
+				}
+            }
+
+            _plugin.setCopySourceSession(_session);
+            final IDatabaseObjectInfo[] fdbObjs = dbObjs;
+            final SQLDatabaseMetaData md = 
+                _session.getSQLConnection().getSQLMetaData();
+            _session.getApplication().getThreadPool().addTask(new Runnable() {
+                public void run() {
+                    try {
+                        getInsertionOrder(fdbObjs, md);
+                        _plugin.setPasteMenuEnabled(true);
+                    } catch (SQLException e) {
+                        log.error("Unexected exception: ", e);
+                    }
+                }
+            });
+            
+        } 
+    }
+    
+    private void getInsertionOrder(IDatabaseObjectInfo[] dbObjs,
+                                                    SQLDatabaseMetaData md) 
+        throws SQLException
+    {
+        List<ITableInfo> selectedTables = new ArrayList<ITableInfo>();
+        for (int i = 0; i < dbObjs.length; i++) {
+            selectedTables.add((ITableInfo)dbObjs[i]);
+        }
+        ProgessCallBackDialog cb = 
+            new ProgessCallBackDialog(_session.getApplication().getMainFrame(), 
+                                       i18n.PROGRESS_DIALOG_TITLE,
+                                       dbObjs.length);
+        
+        cb.setLoadingPrefix(i18n.LOADING_PREFIX);
+        
+        selectedTables = 
+            SQLUtilities.getInsertionOrder(selectedTables, 
+                                           md, 
+                                           cb);
+        
+        _plugin.setSelectedDatabaseObjects(
+                selectedTables.toArray(new IDatabaseObjectInfo[dbObjs.length]));
+    }
+    
+}

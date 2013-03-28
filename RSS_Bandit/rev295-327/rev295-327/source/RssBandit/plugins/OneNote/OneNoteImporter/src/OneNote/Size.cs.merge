@@ -1,0 +1,59 @@
+using System;
+using System.Xml;
+namespace Microsoft.Office.OneNote
+{
+ [Serializable]
+ public class Size : ImportNode
+ {
+  public Size(double sizeInPoints)
+  {
+   if (sizeInPoints < 0.0 || sizeInPoints > 1000000.00 || Double.IsNaN(sizeInPoints))
+   {
+    throw new ArgumentException("Invalid Size.");
+   }
+   this.sizeInPoints = sizeInPoints;
+  }
+  public override object Clone()
+  {
+   return MemberwiseClone();
+  }
+  public static Size FromInches(double sizeInInches)
+  {
+   return new Size(UnitConversions.InchesToPoints(sizeInInches));
+  }
+  public override string ToString()
+  {
+   return sizeInPoints.ToString();
+  }
+  public override bool Equals(object obj)
+  {
+   Size size = obj as Size;
+   if (size != null)
+   {
+    return sizeInPoints.Equals(size.sizeInPoints);
+   }
+   return false;
+  }
+  public override int GetHashCode()
+  {
+   return sizeInPoints.GetHashCode();
+  }
+  public double InPoints()
+  {
+   return sizeInPoints;
+  }
+  public double InInches()
+  {
+   return UnitConversions.PointsToInches(sizeInPoints);
+  }
+  protected internal override void SerializeToXml(XmlNode parentNode)
+  {
+   XmlDocument xmlDocument = parentNode.OwnerDocument;
+   XmlAttribute attribute = xmlDocument.CreateAttribute(Name);
+   attribute.Value = ToString();
+   parentNode.AppendChild(attribute);
+  }
+  private double sizeInPoints;
+ }
+}
+

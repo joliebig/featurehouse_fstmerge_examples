@@ -1,0 +1,13 @@
+ 
+[assembly: AssemblyTitle("AdsBlocker.AddIn")]
+[assembly: AssemblyDescription("AdsBlocker AddIn Sample")]
+[assembly: AssemblyConfiguration("")]
+[assembly: AssemblyCompany("www.rssbandit.org")]
+[assembly: AssemblyProduct("RSS Bandit")]
+[assembly: AssemblyCopyright("")]
+[assembly: AssemblyTrademark("")]
+[assembly: AssemblyCulture("")]
+[assembly: AssemblyVersion("1.6.0.1")]
+[assembly: AssemblyDelaySign(false)]
+[assembly: AssemblyKeyFile("")]
+[assembly: AssemblyKeyName("")]

@@ -1,0 +1,100 @@
+./rev16588-16755/result
+Semistructured merge
+(2, 3, 6, 0, 529, 2)
+LOC with comments: 163508
+LOC without comments: 100927
+Unstructured merge
+(2, 3, 6, 0, 529, 2)
+LOC with comments: 133466
+LOC without comments: 101507
+
+./rev16588-16883/result
+Semistructured merge
+(0, 0, 0, 0, 0, 0)
+LOC with comments: 0
+LOC without comments: 0
+Unstructured merge
+(0, 0, 0, 0, 0, 0)
+LOC with comments: 0
+LOC without comments: 0
+
+./rev16588-17060/result
+Semistructured merge
+(0, 0, 0, 0, 0, 0)
+LOC with comments: 0
+LOC without comments: 0
+Unstructured merge
+(0, 0, 0, 0, 0, 0)
+LOC with comments: 0
+LOC without comments: 0
+
+./rev16588-17316/result
+Semistructured merge
+(0, 0, 0, 0, 0, 0)
+LOC with comments: 0
+LOC without comments: 0
+Unstructured merge
+(0, 0, 0, 0, 0, 0)
+LOC with comments: 0
+LOC without comments: 0
+
+./rev16588-17492/result
+Semistructured merge
+(0, 0, 0, 0, 0, 0)
+LOC with comments: 0
+LOC without comments: 0
+Unstructured merge
+(0, 0, 0, 0, 0, 0)
+LOC with comments: 0
+LOC without comments: 0
+
+./rev16588-17551/result
+Semistructured merge
+(0, 0, 0, 0, 0, 0)
+LOC with comments: 0
+LOC without comments: 0
+Unstructured merge
+(0, 0, 0, 0, 0, 0)
+LOC with comments: 0
+LOC without comments: 0
+
+./rev16883-16964/result
+Semistructured merge
+(0, 0, 0, 0, 0, 0)
+LOC with comments: 0
+LOC without comments: 0
+Unstructured merge
+(0, 0, 0, 0, 0, 0)
+LOC with comments: 0
+LOC without comments: 0
+
+./rev4676-4998/result
+Semistructured merge
+(14, 231, 2, 0, 409, 2)
+LOC with comments: 138223
+LOC without comments: 84995
+Unstructured merge
+(4, 438, 4, 0, 409, 3)
+LOC with comments: 111117
+LOC without comments: 85194
+
+./rev9022-9450/result
+Semistructured merge
+(0, 0, 0, 0, 0, 0)
+LOC with comments: 0
+LOC without comments: 0
+Unstructured merge
+(0, 0, 0, 0, 0, 0)
+LOC with comments: 0
+LOC without comments: 0
+
+./rev9022-9462/result
+Semistructured merge
+(0, 0, 0, 0, 0, 0)
+LOC with comments: 0
+LOC without comments: 0
+Unstructured merge
+(0, 0, 0, 0, 0, 0)
+LOC with comments: 0
+LOC without comments: 0
+

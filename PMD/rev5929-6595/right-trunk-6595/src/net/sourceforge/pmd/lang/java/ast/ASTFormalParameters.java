@@ -1,0 +1,22 @@
+
+
+package net.sourceforge.pmd.lang.java.ast;
+
+public class ASTFormalParameters extends AbstractJavaNode {
+    public ASTFormalParameters(int id) {
+        super(id);
+    }
+
+    public ASTFormalParameters(JavaParser p, int id) {
+        super(p, id);
+    }
+
+    public int getParameterCount() {
+        return jjtGetNumChildren();
+    }
+
+    
+    public Object jjtAccept(JavaParserVisitor visitor, Object data) {
+        return visitor.visit(this, data);
+    }
+}

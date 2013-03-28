@@ -1,0 +1,175 @@
+"Be at one with Outlook"
+import sys
+if sys.platform!="win32":
+   raise ImportError()
+import common
+import outlook_com
+import pywintypes
+def getcontacts(folder, keys=None):
+    """Returns a list of dicts"""
+    res=[]
+    for oc in range(folder.Items.Count):
+        contact=folder.Items.Item(oc+1)
+        if contact.Class == outlook_com.constants.olContact:
+            record={}
+            if keys is None:
+                keys=[]
+                for key in contact._prop_map_get_:
+                    if contact._prop_map_get_[key][-1] is None:
+                        keys.append(key)
+            for key in keys:
+                v=getattr(contact, key)
+                if v not in (None, "", "\x00\x00"):
+                    if isinstance(v, pywintypes.TimeType): # convert from com time
+                        try:
+                            v=int(v)
+                        except ValueError:
+                            continue
+                    if key=="Categories":
+                       v=";".join([x.strip() for x in v.split(",")])
+                    if key.startswith("Email") and key.endswith("Address"):
+                       keytype=key+"Type"
+                       if keytype not in keys:
+                          if getattr(contact, keytype)!="SMTP":
+                             continue
+                    record[key]=v
+            res.append(record)
+    return res
+def getitemdata(item, record, keys, client):
+    for k, k_out, convertor_func in keys:
+        v=getattr(item, k)
+        if v is None or v=="\x00\x00":
+            v=''
+        if convertor_func is not None:
+            try:
+                v=convertor_func(record, v, client)
+            except:
+                raise
+        if k_out is not None:
+            record[k_out]=v
+    return record
+def getdata(folder, keys=None, preset_dict={}, client=None, post_func=None):
+    """Returns a list of dicts"""
+    res=[]
+    import_errors=[]
+    if not folder.Items.Count:
+        return res, import_errors
+    if keys is None:
+        keys=[]
+        item=folder.Items.Item(1)
+        for k in item._prop_map_get_:
+            if item._prop_map_get_[k][-1] is None:
+                keys.append((k, k, None))
+    for i in range(folder.Items.Count):
+        item=folder.Items.Item(i+1)
+        record=preset_dict.copy()
+        try:
+            getitemdata(item, record, keys, client)
+            if post_func is None or post_func(item, record, client):
+                res.append(record)
+        except:
+            import_errors.append(record)
+    return res, import_errors
+def getfolderfromid(id, default=False, default_type='contacts'):
+    """Returns a folder object from the supplied id
+    @param id: The id of the folder
+    @param default: If true and the folder can't be found, then return the default"""
+    onMAPI = getmapinamespace()
+    try:
+        folder=onMAPI.GetFolderFromID(id)
+    except pywintypes.com_error,e:
+        folder=None
+    if default and not folder:
+        if default_type=='calendar':
+            default_folder=outlook_com.constants.olFolderCalendar
+        elif default_type=='notes':
+            default_folder=outlook_com.constants.olFolderNotes
+        elif default_type=='tasks':
+            default_folder=outlook_com.constants.olFolderTasks
+        else:
+            default_folder=outlook_com.constants.olFolderContacts
+        folder=onMAPI.GetDefaultFolder(default_folder)
+    return folder
+def getfoldername(folder):
+    n=[]
+    while folder:
+        try:
+            n=[folder.Name]+n
+        except AttributeError:
+            break # namespace object has no 'Name'
+        folder=folder.Parent
+    return " / ".join(n)
+def getfolderid(folder):
+    return str(folder.EntryID) # de-unicodify it
+def pickfolder():
+    return getmapinamespace().PickFolder()
+_outlookappobject=None
+def getoutlookapp():
+    global _outlookappobject
+    if _outlookappobject is None:
+        _outlookappobject=outlook_com.Application()
+    return _outlookappobject
+_mapinamespaceobject=None
+def getmapinamespace():
+    global _mapinamespaceobject
+    if _mapinamespaceobject is None:
+        _mapinamespaceobject=getoutlookapp().GetNamespace("MAPI")
+    return _mapinamespaceobject
+def releaseoutlook():
+    global _mapinamespaceobject
+    global _outlookappobject
+    _mapinamespaceobject=None
+    _outlookappobject=None
+if __name__=='__main__':
+    oOutlookApp=outlook_com.Application()
+    onMAPI = oOutlookApp.GetNamespace("MAPI")
+    import guihelper # needed for common.strorunicode symbol
+    res=onMAPI.PickFolder()
+    print res
+    contacts=getcontacts(res)
+    keys={}
+    for item in contacts:
+        for k in item.keys():
+            keys[k]=1
+    keys=keys.keys()
+    keys.sort()
+    for k in keys:
+        print "   ('%s',  )," % (k,)
+    import wx
+    import wx.grid
+    app=wx.PySimpleApp()
+    import wx.lib.colourdb
+    wx.lib.colourdb.updateColourDB()
+    f=wx.Frame(None, -1, "Outlookinfo")
+    g=wx.grid.Grid(f, -1)
+    g.CreateGrid(len(contacts)+1,len(keys))
+    g.SetColLabelSize(0)
+    g.SetRowLabelSize(0)
+    g.SetMargins(1,0)
+    g.BeginBatch()
+    attr=wx.grid.GridCellAttr()
+    attr.SetBackgroundColour(wx.GREEN)
+    attr.SetFont(wx.Font(10,wx.SWISS, wx.NORMAL, wx.BOLD))
+    attr.SetReadOnly(True)
+    for k in range(len(keys)):
+        g.SetCellValue(0, k, keys[k])
+    g.SetRowAttr(0,attr)
+    oddattr=wx.grid.GridCellAttr()
+    oddattr.SetBackgroundColour("OLDLACE")
+    oddattr.SetReadOnly(True)
+    evenattr=wx.grid.GridCellAttr()
+    evenattr.SetBackgroundColour("ALICE BLUE")
+    evenattr.SetReadOnly(True)
+    for row in range(len(contacts)):
+        item=contacts[row]
+        for col in range(len(keys)):
+            key=keys[col]
+            v=item.get(key, "")
+            v=common.strorunicode(v)
+            g.SetCellValue(row+1, col, v)
+        g.SetRowAttr(row+1, (evenattr,oddattr)[row%2])
+    g.AutoSizeColumns()
+    g.AutoSizeRows()
+    g.EndBatch()
+    f.Show(True)
+    app.MainLoop()

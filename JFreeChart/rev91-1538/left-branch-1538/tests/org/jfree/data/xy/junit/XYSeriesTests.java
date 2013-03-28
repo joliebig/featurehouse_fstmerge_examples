@@ -1,0 +1,379 @@
+
+
+package org.jfree.data.xy.junit;
+
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
+import java.io.ObjectInput;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutput;
+import java.io.ObjectOutputStream;
+
+import junit.framework.Test;
+import junit.framework.TestCase;
+import junit.framework.TestSuite;
+
+import org.jfree.data.general.SeriesException;
+import org.jfree.data.xy.DefaultXYDataset;
+import org.jfree.data.xy.XYDataItem;
+import org.jfree.data.xy.XYSeries;
+
+
+public class XYSeriesTests extends TestCase {
+
+    
+    public static Test suite() {
+        return new TestSuite(XYSeriesTests.class);
+    }
+
+    
+    public XYSeriesTests(String name) {
+        super(name);
+    }
+
+    
+    public void testEquals() {
+
+        XYSeries s1 = new XYSeries("Series");
+        s1.add(1.0, 1.1);
+        XYSeries s2 = new XYSeries("Series");
+        s2.add(1.0, 1.1);
+        assertTrue(s1.equals(s2));
+        assertTrue(s2.equals(s1));
+
+        s1.setKey("Series X");
+        assertFalse(s1.equals(s2));
+
+        s2.setKey("Series X");
+        assertTrue(s1.equals(s2));
+
+    }
+
+    
+    public void testHashCode() {
+        XYSeries s1 = new XYSeries("Test");
+        XYSeries s2 = new XYSeries("Test");
+        assertEquals(s1, s2);
+        assertEquals(s1.hashCode(), s2.hashCode());
+
+        s1.add(1.0, 500.0);
+        s2.add(1.0, 500.0);
+        assertEquals(s1, s2);
+        assertEquals(s1.hashCode(), s2.hashCode());
+
+        s1.add(2.0, null);
+        s2.add(2.0, null);
+        assertEquals(s1, s2);
+        assertEquals(s1.hashCode(), s2.hashCode());
+
+        s1.add(5.0, 111.0);
+        s2.add(5.0, 111.0);
+        assertEquals(s1, s2);
+        assertEquals(s1.hashCode(), s2.hashCode());
+
+        s1.add(9.0, 1.0);
+        s2.add(9.0, 1.0);
+        assertEquals(s1, s2);
+        assertEquals(s1.hashCode(), s2.hashCode());
+    }
+
+    
+    public void testCloning() {
+        XYSeries s1 = new XYSeries("Series");
+        s1.add(1.0, 1.1);
+        XYSeries s2 = null;
+        try {
+            s2 = (XYSeries) s1.clone();
+        }
+        catch (CloneNotSupportedException e) {
+            e.printStackTrace();
+        }
+        assertTrue(s1 != s2);
+        assertTrue(s1.getClass() == s2.getClass());
+        assertTrue(s1.equals(s2));
+    }
+
+    
+    public void testCloning2() {
+        XYSeries s1 = new XYSeries("S1");
+        s1.add(1.0, 100.0);
+        s1.add(2.0, null);
+        s1.add(3.0, 200.0);
+        XYSeries s2 = null;
+        try {
+            s2 = (XYSeries) s1.clone();
+        }
+        catch (CloneNotSupportedException e) {
+            e.printStackTrace();
+        }
+        assertTrue(s1.equals(s2));
+
+        
+        s2.add(4.0, 300.0);
+        assertFalse(s1.equals(s2));
+        s1.add(4.0, 300.0);
+        assertTrue(s1.equals(s2));
+    }
+
+    
+    public void testCloning3() {
+        XYSeries s1 = new XYSeries("S1");
+        XYSeries s2 = null;
+        try {
+            s2 = (XYSeries) s1.clone();
+        }
+        catch (CloneNotSupportedException e) {
+            e.printStackTrace();
+        }
+        assertTrue(s1.equals(s2));
+
+        
+        s2.add(4.0, 300.0);
+        assertFalse(s1.equals(s2));
+        s1.add(4.0, 300.0);
+        assertTrue(s1.equals(s2));
+    }
+
+    
+    public void testSerialization() {
+
+        XYSeries s1 = new XYSeries("Series");
+        s1.add(1.0, 1.1);
+        XYSeries s2 = null;
+
+        try {
+            ByteArrayOutputStream buffer = new ByteArrayOutputStream();
+            ObjectOutput out = new ObjectOutputStream(buffer);
+            out.writeObject(s1);
+            out.close();
+
+            ObjectInput in = new ObjectInputStream(
+                    new ByteArrayInputStream(buffer.toByteArray()));
+            s2 = (XYSeries) in.readObject();
+            in.close();
+        }
+        catch (Exception e) {
+            e.printStackTrace();
+        }
+        assertEquals(s1, s2);
+
+    }
+
+    
+    public void testIndexOf() {
+        XYSeries s1 = new XYSeries("Series 1");
+        s1.add(1.0, 1.0);
+        s1.add(2.0, 2.0);
+        s1.add(3.0, 3.0);
+        assertEquals(0, s1.indexOf(new Double(1.0)));
+    }
+
+    
+    public void testIndexOf2() {
+        XYSeries s1 = new XYSeries("Series 1", false, true);
+        s1.add(1.0, 1.0);
+        s1.add(3.0, 3.0);
+        s1.add(2.0, 2.0);
+        assertEquals(0, s1.indexOf(new Double(1.0)));
+        assertEquals(1, s1.indexOf(new Double(3.0)));
+        assertEquals(2, s1.indexOf(new Double(2.0)));
+    }
+
+    
+    public void testRemove() {
+
+        XYSeries s1 = new XYSeries("Series 1");
+        s1.add(1.0, 1.0);
+        s1.add(2.0, 2.0);
+        s1.add(3.0, 3.0);
+
+        assertEquals(3, s1.getItemCount());
+        s1.remove(new Double(2.0));
+        assertEquals(new Double(3.0), s1.getX(1));
+
+        s1.remove(0);
+        assertEquals(new Double(3.0), s1.getX(0));
+
+    }
+
+    private static final double EPSILON = 0.0000000001;
+
+    
+    public void testAdditionOfDuplicateXValues() {
+        XYSeries s1 = new XYSeries("Series 1");
+        s1.add(1.0, 1.0);
+        s1.add(2.0, 2.0);
+        s1.add(2.0, 3.0);
+        s1.add(2.0, 4.0);
+        s1.add(3.0, 5.0);
+        assertEquals(1.0, s1.getY(0).doubleValue(), EPSILON);
+        assertEquals(2.0, s1.getY(1).doubleValue(), EPSILON);
+        assertEquals(3.0, s1.getY(2).doubleValue(), EPSILON);
+        assertEquals(4.0, s1.getY(3).doubleValue(), EPSILON);
+        assertEquals(5.0, s1.getY(4).doubleValue(), EPSILON);
+    }
+
+    
+    public void testUpdate() {
+        XYSeries series = new XYSeries("S1");
+        series.add(new Integer(1), new Integer(2));
+        assertEquals(new Integer(2), series.getY(0));
+        series.update(new Integer(1), new Integer(3));
+        assertEquals(new Integer(3), series.getY(0));
+        try {
+            series.update(new Integer(2), new Integer(99));
+            assertTrue(false);
+        }
+        catch (SeriesException e) {
+            
+        }
+    }
+
+    
+    public void testUpdate2() {
+       XYSeries series = new XYSeries("Series", false, true);
+       series.add(5.0, 55.0);
+       series.add(4.0, 44.0);
+       series.add(6.0, 66.0);
+       series.update(new Double(4.0), new Double(99.0));
+       assertEquals(new Double(99.0), series.getY(1));
+    }
+
+    
+    public void testAddOrUpdate() {
+        XYSeries series = new XYSeries("S1", true, false);
+        XYDataItem old = series.addOrUpdate(new Long(1), new Long(2));
+        assertTrue(old == null);
+        assertEquals(1, series.getItemCount());
+        assertEquals(new Long(2), series.getY(0));
+
+        old = series.addOrUpdate(new Long(2), new Long(3));
+        assertTrue(old == null);
+        assertEquals(2, series.getItemCount());
+        assertEquals(new Long(3), series.getY(1));
+
+        old = series.addOrUpdate(new Long(1), new Long(99));
+        assertEquals(new XYDataItem(new Long(1), new Long(2)), old);
+        assertEquals(2, series.getItemCount());
+        assertEquals(new Long(99), series.getY(0));
+        assertEquals(new Long(3), series.getY(1));
+    }
+
+    
+    public void testAddOrUpdate2() {
+        XYSeries series = new XYSeries("Series", false, false);
+        series.add(5.0, 5.5);
+        series.add(6.0, 6.6);
+        series.add(3.0, 3.3);
+        series.add(4.0, 4.4);
+        series.add(2.0, 2.2);
+        series.add(1.0, 1.1);
+        series.addOrUpdate(new Double(3.0), new Double(33.3));
+        series.addOrUpdate(new Double(2.0), new Double(22.2));
+        assertEquals(33.3, series.getY(2).doubleValue(), EPSILON);
+        assertEquals(22.2, series.getY(4).doubleValue(), EPSILON);
+    }
+
+    
+    public void testAddOrUpdate3() {
+        XYSeries series = new XYSeries("Series", false, true);
+        series.addOrUpdate(1.0, 1.0);
+        series.addOrUpdate(1.0, 2.0);
+        series.addOrUpdate(1.0, 3.0);
+        assertEquals(new Double(1.0), series.getY(0));
+        assertEquals(new Double(2.0), series.getY(1));
+        assertEquals(new Double(3.0), series.getY(2));
+        assertEquals(3, series.getItemCount());
+    }
+
+    
+    public void testAdd() {
+        XYSeries series = new XYSeries("Series", false, true);
+        series.add(5.0, 5.50);
+        series.add(5.1, 5.51);
+        series.add(6.0, 6.6);
+        series.add(3.0, 3.3);
+        series.add(4.0, 4.4);
+        series.add(2.0, 2.2);
+        series.add(1.0, 1.1);
+        assertEquals(5.5, series.getY(0).doubleValue(), EPSILON);
+        assertEquals(5.51, series.getY(1).doubleValue(), EPSILON);
+        assertEquals(6.6, series.getY(2).doubleValue(), EPSILON);
+        assertEquals(3.3, series.getY(3).doubleValue(), EPSILON);
+        assertEquals(4.4, series.getY(4).doubleValue(), EPSILON);
+        assertEquals(2.2, series.getY(5).doubleValue(), EPSILON);
+        assertEquals(1.1, series.getY(6).doubleValue(), EPSILON);
+    }
+
+    
+    public void testSetMaximumItemCount() {
+        XYSeries s1 = new XYSeries("S1");
+        assertEquals(Integer.MAX_VALUE, s1.getMaximumItemCount());
+        s1.setMaximumItemCount(2);
+        assertEquals(2, s1.getMaximumItemCount());
+        s1.add(1.0, 1.1);
+        s1.add(2.0, 2.2);
+        s1.add(3.0, 3.3);
+        assertEquals(2.0, s1.getX(0).doubleValue(), EPSILON);
+        assertEquals(3.0, s1.getX(1).doubleValue(), EPSILON);
+    }
+
+    
+    public void testSetMaximumItemCount2() {
+        XYSeries s1 = new XYSeries("S1");
+        s1.add(1.0, 1.1);
+        s1.add(2.0, 2.2);
+        s1.add(3.0, 3.3);
+        s1.setMaximumItemCount(2);
+        assertEquals(2.0, s1.getX(0).doubleValue(), EPSILON);
+        assertEquals(3.0, s1.getX(1).doubleValue(), EPSILON);
+    }
+
+    
+    public void testToArray() {
+        XYSeries s = new XYSeries("S1");
+        double[][] array = s.toArray();
+        assertEquals(2, array.length);
+        assertEquals(0, array[0].length);
+        assertEquals(0, array[1].length);
+
+        s.add(1.0, 2.0);
+        array = s.toArray();
+        assertEquals(1, array[0].length);
+        assertEquals(1, array[1].length);
+        assertEquals(2, array.length);
+        assertEquals(1.0, array[0][0], EPSILON);
+        assertEquals(2.0, array[1][0], EPSILON);
+
+        s.add(2.0, null);
+        array = s.toArray();
+        assertEquals(2, array.length);
+        assertEquals(2, array[0].length);
+        assertEquals(2, array[1].length);
+        assertEquals(2.0, array[0][1], EPSILON);
+        assertTrue(Double.isNaN(array[1][1]));
+    }
+
+    
+    public void testToArrayExample() {
+        XYSeries s = new XYSeries("S");
+        s.add(1.0, 11.0);
+        s.add(2.0, 22.0);
+        s.add(3.5, 35.0);
+        s.add(5.0, null);
+        DefaultXYDataset dataset = new DefaultXYDataset();
+        dataset.addSeries("S", s.toArray());
+        assertEquals(1, dataset.getSeriesCount());
+        assertEquals(4, dataset.getItemCount(0));
+        assertEquals("S", dataset.getSeriesKey(0));
+        assertEquals(1.0, dataset.getXValue(0, 0), EPSILON);
+        assertEquals(2.0, dataset.getXValue(0, 1), EPSILON);
+        assertEquals(3.5, dataset.getXValue(0, 2), EPSILON);
+        assertEquals(5.0, dataset.getXValue(0, 3), EPSILON);
+        assertEquals(11.0, dataset.getYValue(0, 0), EPSILON);
+        assertEquals(22.0, dataset.getYValue(0, 1), EPSILON);
+        assertEquals(35.0, dataset.getYValue(0, 2), EPSILON);
+        assertTrue(Double.isNaN(dataset.getYValue(0, 3)));
+    }
+
+}

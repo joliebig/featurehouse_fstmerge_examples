@@ -1,0 +1,18 @@
+package net.sourceforge.pmd.lang.cpp;
+
+import net.sourceforge.pmd.lang.AbstractLanguageVersionHandler;
+import net.sourceforge.pmd.lang.Parser;
+import net.sourceforge.pmd.lang.ParserOptions;
+import net.sourceforge.pmd.lang.rule.RuleViolationFactory;
+
+
+public class CppHandler extends AbstractLanguageVersionHandler {
+
+    public RuleViolationFactory getRuleViolationFactory() {
+	throw new UnsupportedOperationException("getRuleViolationFactory() is not supported for C++");
+    }
+
+    public Parser getParser(ParserOptions parserOptions) {
+	return new CppParser(parserOptions);
+    }
+}

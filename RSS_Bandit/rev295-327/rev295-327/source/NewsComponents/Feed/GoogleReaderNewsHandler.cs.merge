@@ -1,0 +1,18 @@
+<<<<<<< /work/joliebig/semistructured_merge/fse2011_artifact/binary/fstmerge_tmp1307442770171/fstmerge_var1_4154651651181483365
+using System;
+using System.Collections.Generic;
+using System.Text;
+using NewsComponents.Net;
+using NewsComponents.Search;
+namespace NewsComponents.Feed {
+    class GoogleReaderNewsHandler : NewsHandler{
+        public override void LoadFeedlist()
+        {
+        }
+        public override void BootstrapAndLoadFeedlist(feeds feedlist)
+        {
+        }
+    }
+}=======
+>>>>>>> /work/joliebig/semistructured_merge/fse2011_artifact/binary/fstmerge_tmp1307442770171/fstmerge_var2_8170247330901850504
+

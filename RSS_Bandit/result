@@ -1,0 +1,40 @@
+./rev295-327/result
+Semistructured merge
+(32, 300, 347, 4, 418, 10)
+LOC with comments: 125028
+LOC without comments: 110713
+Unstructured merge
+(39, 1288, 267, 0, 418, 12)
+LOC with comments: 111830
+LOC without comments: 111412
+
+./rev295-365/result
+Semistructured merge
+(0, 0, 0, 0, 0, 0)
+LOC with comments: 0
+LOC without comments: 0
+Unstructured merge
+(0, 0, 0, 0, 0, 0)
+LOC with comments: 0
+LOC without comments: 0
+
+./rev295-417/result
+Semistructured merge
+(0, 0, 0, 0, 0, 0)
+LOC with comments: 0
+LOC without comments: 0
+Unstructured merge
+(0, 0, 0, 0, 0, 0)
+LOC with comments: 0
+LOC without comments: 0
+
+./rev295-501/result
+Semistructured merge
+(0, 0, 0, 0, 0, 0)
+LOC with comments: 0
+LOC without comments: 0
+Unstructured merge
+(0, 0, 0, 0, 0, 0)
+LOC with comments: 0
+LOC without comments: 0
+

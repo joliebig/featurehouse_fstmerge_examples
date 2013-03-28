@@ -1,0 +1,14 @@
+namespace FireIRC.Extenciblility
+{
+    public enum MessageType
+    {
+        OnText,
+        OnAction,
+        OnNotice,
+    }
+    public enum MessageZone
+    {
+        Channel,
+        Query,
+    }
+}

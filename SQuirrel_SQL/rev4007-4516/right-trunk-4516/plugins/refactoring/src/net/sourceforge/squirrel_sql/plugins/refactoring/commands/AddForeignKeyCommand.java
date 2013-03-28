@@ -1,0 +1,170 @@
+package net.sourceforge.squirrel_sql.plugins.refactoring.commands;
+
+
+
+import java.sql.SQLException;
+import java.util.HashMap;
+import java.util.TreeSet;
+
+import net.sourceforge.squirrel_sql.client.session.ISession;
+import net.sourceforge.squirrel_sql.client.session.SQLExecuterTask;
+import net.sourceforge.squirrel_sql.fw.dialects.DatabaseObjectQualifier;
+import net.sourceforge.squirrel_sql.fw.dialects.HibernateDialect;
+import net.sourceforge.squirrel_sql.fw.gui.GUIUtils;
+import net.sourceforge.squirrel_sql.fw.sql.DatabaseObjectType;
+import net.sourceforge.squirrel_sql.fw.sql.IDatabaseObjectInfo;
+import net.sourceforge.squirrel_sql.fw.sql.ITableInfo;
+import net.sourceforge.squirrel_sql.fw.sql.TableColumnInfo;
+import net.sourceforge.squirrel_sql.fw.util.StringManager;
+import net.sourceforge.squirrel_sql.fw.util.StringManagerFactory;
+import net.sourceforge.squirrel_sql.fw.util.log.ILogger;
+import net.sourceforge.squirrel_sql.fw.util.log.LoggerController;
+import net.sourceforge.squirrel_sql.plugins.refactoring.gui.AddForeignKeyDialog;
+
+public class AddForeignKeyCommand extends AbstractRefactoringCommand
+{
+	
+	@SuppressWarnings("unused")
+	private final static ILogger s_log = LoggerController.createLogger(AddForeignKeyCommand.class);
+
+	
+	private static final StringManager s_stringMgr =
+		StringManagerFactory.getStringManager(AddForeignKeyCommand.class);
+
+	static interface i18n
+	{
+		String SHOWSQL_DIALOG_TITLE = s_stringMgr.getString("AddForeignKeyCommand.sqlDialogTitle");
+	}
+
+	protected AddForeignKeyDialog customDialog;
+
+	public AddForeignKeyCommand(ISession session, IDatabaseObjectInfo[] info)
+	{
+		super(session, info);
+	}
+
+	
+	@Override
+	protected void onExecute() throws SQLException
+	{
+		if (!(_info[0] instanceof ITableInfo))
+			return;
+
+		showCustomDialog();
+	}
+
+	
+	@Override
+	protected String[] generateSQLStatements() throws Exception
+	{
+		DatabaseObjectQualifier qualifier =
+			new DatabaseObjectQualifier(_info[0].getCatalogName(), _info[0].getSchemaName());
+
+		String[] result =
+			_dialect.getAddForeignKeyConstraintSQL(_info[0].getSimpleName(),
+				customDialog.getReferencedTable(),
+				customDialog.getConstraintName(),
+				customDialog.isDeferrable(),
+				customDialog.isDeferred(),
+				customDialog.isMatchFull(),
+				customDialog.isAutoFKIndex(),
+				customDialog.getFKIndexName(),
+				customDialog.getReferencedColumns(),
+				customDialog.getOnUpdateAction(),
+				customDialog.getOnDeleteAction(),
+				qualifier,
+				_sqlPrefs);
+		return result;
+	}
+
+	
+	@Override
+	protected void executeScript(String script)
+	{
+		CommandExecHandler handler = new CommandExecHandler(_session);
+
+		SQLExecuterTask executer = new SQLExecuterTask(_session, script, handler);
+		executer.run(); 
+
+		_session.getApplication().getThreadPool().addTask(new Runnable()
+		{
+			public void run()
+			{
+				GUIUtils.processOnSwingEventThread(new Runnable()
+				{
+					public void run()
+					{
+						customDialog.setVisible(false);
+						_session.getSchemaInfo().reloadAll();
+					}
+				});
+			}
+		});
+	}
+
+	
+	@Override
+	protected boolean isRefactoringSupportedForDialect(HibernateDialect dialectExt)
+	{
+		return dialectExt.supportsAddForeignKeyConstraint();
+	}
+
+	private void showCustomDialog() throws SQLException
+	{
+		final ITableInfo selectedTable = (ITableInfo) _info[0];
+		String schema = selectedTable.getSchemaName();
+		String catalog = selectedTable.getCatalogName();
+		ITableInfo[] tables = _session.getSchemaInfo().getITableInfos(catalog, schema);
+
+		TableColumnInfo[] tableColumnInfos = _session.getMetaData().getColumnInfo(selectedTable);
+		if (tableColumnInfos == null || tableColumnInfos.length == 0)
+		{
+			_session.showErrorMessage(s_stringMgr.getString("AddForeignKeyCommand.noColumns",
+				selectedTable.getSimpleName()));
+			return;
+		}
+
+		final TreeSet<String> localColumns = new TreeSet<String>();
+		for (TableColumnInfo columns : tableColumnInfos)
+		{
+			localColumns.add(columns.getColumnName());
+		}
+
+		final HashMap<String, TableColumnInfo[]> allTables = new HashMap<String, TableColumnInfo[]>();
+		for (ITableInfo table : tables)
+		{
+			if (table.getDatabaseObjectType() == DatabaseObjectType.TABLE)
+			{
+				TableColumnInfo[] columnInfos = _session.getMetaData().getColumnInfo(table);
+				if (columnInfos != null && columnInfos.length > 0)
+				{
+					allTables.put(table.getSimpleName(), _session.getMetaData().getColumnInfo(table));
+				}
+			}
+		}
+
+		_session.getApplication().getThreadPool().addTask(new Runnable()
+		{
+			public void run()
+			{
+				GUIUtils.processOnSwingEventThread(new Runnable()
+				{
+					public void run()
+					{
+						customDialog =
+							new AddForeignKeyDialog(selectedTable.getSimpleName(),
+															localColumns.toArray(new String[] {}),
+															allTables);
+						customDialog.addExecuteListener(new ExecuteListener());
+						customDialog.addEditSQLListener(new EditSQLListener(customDialog));
+						customDialog.addShowSQLListener(new ShowSQLListener(i18n.SHOWSQL_DIALOG_TITLE, customDialog));
+
+						customDialog.setLocationRelativeTo(_session.getApplication().getMainFrame());
+						customDialog.setVisible(true);
+					}
+				});
+			}
+		});
+	}
+
+}

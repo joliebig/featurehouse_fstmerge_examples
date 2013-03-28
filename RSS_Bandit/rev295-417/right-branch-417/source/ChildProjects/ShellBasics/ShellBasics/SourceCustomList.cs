@@ -1,0 +1,51 @@
+using System;
+using System.Runtime.InteropServices;
+namespace ShellLib
+{
+ [ComVisible(true)]
+ [Guid("C5D051E1-B004-4163-A9FE-13526AE0537E")]
+ public class SourceCustomList : UCOMIEnumString
+ {
+  public string[] StringList;
+  private Int32 currentPosition = 0;
+  public Int32 Next(
+   Int32 celt,
+   String[] rgelt,
+   out Int32 pceltFetched)
+  {
+   pceltFetched = 0;
+   while ((currentPosition <= StringList.Length-1) && (pceltFetched<celt))
+   {
+    rgelt[pceltFetched] = StringList[currentPosition];
+    pceltFetched++;
+    currentPosition++;
+   }
+   if (pceltFetched == celt)
+    return 0;
+   else
+    return 1;
+  }
+  public Int32 Skip(
+   Int32 celt)
+  {
+   currentPosition += (int)celt;
+   if (currentPosition <= StringList.Length-1)
+    return 0;
+   else
+    return 1;
+  }
+  public Int32 Reset()
+  {
+   currentPosition = 0;
+   return 0;
+  }
+  public void Clone(
+   out UCOMIEnumString ppenum)
+  {
+   SourceCustomList clone = new SourceCustomList();
+   clone.currentPosition = currentPosition;
+   clone.StringList = (String[])StringList.Clone();
+   ppenum = clone;
+  }
+ }
+}

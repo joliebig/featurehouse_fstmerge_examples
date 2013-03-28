@@ -1,0 +1,40 @@
+using System;
+using System.Threading;
+namespace NewsComponents.Threading
+{
+ public class Semaphore
+ {
+  private int _count;
+  public Semaphore() : this(1)
+  {
+  }
+  public Semaphore(int count)
+  {
+   if (count < 0) throw new ArgumentException("Semaphore must have a count of at least 0.", "count");
+   _count = count;
+  }
+  public void AddOne() { V(); }
+  public void WaitOne() { P(); }
+  public void P()
+  {
+   lock(this)
+   {
+    while(_count <= 0) Monitor.Wait(this, Timeout.Infinite);
+    _count--;
+   }
+  }
+  public void V()
+  {
+   lock(this)
+   {
+    _count++;
+    Monitor.Pulse(this);
+   }
+  }
+  public void Reset(int count)
+  {
+   lock(this) { _count = count; }
+  }
+ }
+}
+

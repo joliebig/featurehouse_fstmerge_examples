@@ -1,0 +1,62 @@
+package edu.rice.cs.dynamicjava.symbol;
+
+import java.util.Collections;
+
+import edu.rice.cs.plt.iter.IterUtil;
+import edu.rice.cs.plt.lambda.WrappedException;
+
+import edu.rice.cs.dynamicjava.Options;
+import edu.rice.cs.dynamicjava.interpreter.RuntimeBindings;
+import edu.rice.cs.dynamicjava.interpreter.EvaluatorException;
+import edu.rice.cs.dynamicjava.interpreter.StatementEvaluator;
+import edu.rice.cs.dynamicjava.symbol.type.Type;
+import edu.rice.cs.dynamicjava.symbol.type.VariableType;
+
+import koala.dynamicjava.tree.MethodDeclaration;
+import koala.dynamicjava.tree.tiger.TypeParameter;
+import koala.dynamicjava.interpreter.NodeProperties;
+
+
+public class LocalFunction implements Function {
+  
+  private MethodDeclaration _ast;
+  
+  public LocalFunction(MethodDeclaration ast) {
+    _ast = ast;
+  }
+  
+  public String declaredName() { return _ast.getName(); }
+  
+  public Type returnType() { return NodeProperties.getType(_ast.getReturnType()); }
+  
+  public Iterable<VariableType> typeParameters() {
+    Iterable<TypeParameter> tparams = _ast.getTypeParams().unwrap(Collections.<TypeParameter>emptyList());
+    return IterUtil.mapSnapshot(tparams, NodeProperties.NODE_TYPE_VARIABLE);
+  }
+  
+  public Iterable<LocalVariable> parameters() {
+    return IterUtil.mapSnapshot(_ast.getParameters(), NodeProperties.NODE_VARIABLE);
+  }
+  
+  public Iterable<Type> thrownTypes() {
+    return IterUtil.mapSnapshot(_ast.getExceptions(), NodeProperties.NODE_TYPE);
+  }
+  
+  public Object evaluate(Iterable<Object> args, RuntimeBindings bindings, Options options)
+    throws EvaluatorException {
+    RuntimeBindings bodyBindings = new RuntimeBindings(bindings, parameters(), args);
+    try {
+      _ast.getBody().acceptVisitor(new StatementEvaluator(bodyBindings, options));
+      
+      return SymbolUtil.initialValue(NodeProperties.getErasedType(_ast).value());
+    }
+    catch (StatementEvaluator.ReturnException e) {
+      return e.value().unwrap(null);
+    }
+    catch (WrappedException e) {
+      if (e.getCause() instanceof EvaluatorException) { throw (EvaluatorException) e.getCause(); }
+      else { throw e; }
+    }
+  }
+  
+}

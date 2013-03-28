@@ -1,0 +1,143 @@
+using System; 
+using System.Collections; 
+using System.Windows.Forms; 
+using System.Globalization; namespace  System.Windows.Forms.ThListView.Sorting {
+	
+ public class  ThreadedListViewItemComparer : IComparer {
+		
+  public  ThreadedListViewItemComparer(int sortColumn, bool ascending) {
+   _column = sortColumn;
+   _ascending = ascending;
+  }
+ 
+  public  int Compare(object lhs, object rhs) {
+   ThreadedListViewItem lhsLvi = lhs as ThreadedListViewItem;
+   ThreadedListViewItem rhsLvi = rhs as ThreadedListViewItem;
+   if(lhsLvi == null || rhsLvi == null)
+    return 0;
+   if (Object.ReferenceEquals(lhsLvi, rhsLvi))
+    return 0;
+   int result = 0;
+   if (lhsLvi.IndentLevel != rhsLvi.IndentLevel) {
+    if (lhsLvi.IndentLevel < rhsLvi.IndentLevel) {
+     if (rhsLvi.Parent != null && rhsLvi.Parent.Equals(lhsLvi))
+      return -1;
+     return this.Compare(lhsLvi, rhsLvi.Parent);
+    } else {
+     if (lhsLvi.Parent != null && lhsLvi.Parent.Equals(rhsLvi))
+      return 1;
+     return this.Compare(lhsLvi.Parent, rhsLvi);
+    }
+   } else {
+    if (lhsLvi.Parent != null && !lhsLvi.Parent.Equals(rhsLvi.Parent))
+     return this.Compare(lhsLvi.Parent, rhsLvi.Parent);
+   }
+   ListViewItem.ListViewSubItemCollection lhsItems = lhsLvi.SubItems;
+   ListViewItem.ListViewSubItemCollection rhsItems = rhsLvi.SubItems;
+   string lhsText = (lhsItems.Count > _column) ? lhsItems[_column].Text : String.Empty;
+   string rhsText = (rhsItems.Count > _column) ? rhsItems[_column].Text : String.Empty;
+   if(lhsText.Length == 0 || rhsText.Length == 0)
+    result = lhsText.CompareTo(rhsText);
+   else {
+    try {
+     result = OnCompare(lhsText, rhsText);
+    } catch (FormatException fex) {
+     System.Diagnostics.Trace.WriteLine(this.ToString() + " failed to compare: " + fex.Message);
+    }
+   }
+   if(!_ascending)
+    result = -result;
+   return result;
+  }
+ 
+  protected virtual  int OnCompare(string lhs, string rhs) {
+   return String.Compare(lhs, rhs, false);
+  }
+ 
+  private  int _column;
+ 
+  private  bool _ascending;
+
+	}
+	
+ public class  ThreadedListViewTextItemComparer : ThreadedListViewItemComparer {
+		
+  public  ThreadedListViewTextItemComparer(Int32 sortColumn, Boolean ascending):
+   base(sortColumn, ascending) {
+  }
+
+	}
+	
+ public class  ThreadedListViewCaseInsensitiveTextItemComparer : ThreadedListViewItemComparer {
+		
+  public  ThreadedListViewCaseInsensitiveTextItemComparer(Int32 sortColumn, Boolean ascending):
+   base(sortColumn, ascending) {
+  }
+ 
+  protected override  Int32 OnCompare(String lhs, String rhs) {
+   return String.Compare(lhs, rhs, true);
+  }
+
+	}
+	
+ public class  ThreadedListViewDateTimeItemComparer : ThreadedListViewItemComparer {
+		
+  private static  string[] formats = new string[] {"G", "g", "F", "f"};
+ 
+  public  ThreadedListViewDateTimeItemComparer(Int32 sortColumn, Boolean ascending):
+   base(sortColumn, ascending) {
+  }
+ 
+  protected override  Int32 OnCompare(String lhs, String rhs) {
+   return
+    DateTime.ParseExact(lhs, formats, CultureInfo.CurrentCulture, DateTimeStyles.AllowWhiteSpaces)
+     .CompareTo(
+    DateTime.ParseExact(rhs, formats, CultureInfo.CurrentCulture, DateTimeStyles.AllowWhiteSpaces)
+     );
+  }
+
+	}
+	
+ public class  ThreadedListViewInt32ItemComparer : ThreadedListViewItemComparer {
+		
+  public  ThreadedListViewInt32ItemComparer(Int32 sortColumn, Boolean ascending):
+   base(sortColumn, ascending) {
+  }
+ 
+  protected override  Int32 OnCompare(String lhs, String rhs) {
+   return Int32.Parse(lhs, NumberStyles.Number) - Int32.Parse(rhs, NumberStyles.Number);
+  }
+
+	}
+	
+ public class  ThreadedListViewInt64ItemComparer : ThreadedListViewItemComparer {
+		
+  public  ThreadedListViewInt64ItemComparer(Int32 sortColumn, Boolean ascending):
+   base(sortColumn, ascending) {
+  }
+ 
+  protected override  Int32 OnCompare(String lhs, String rhs) {
+   return (Int32)(Int64.Parse(lhs, NumberStyles.Number) - Int64.Parse(rhs, NumberStyles.Number));
+  }
+
+	}
+	
+ public class  ThreadedListViewDoubleItemComparer : ThreadedListViewItemComparer {
+		
+  public  ThreadedListViewDoubleItemComparer(Int32 sortColumn, Boolean ascending):
+   base(sortColumn, ascending) {
+  }
+ 
+  protected override  Int32 OnCompare(String lhs, String rhs) {
+   Double result = Double.Parse(lhs) - Double.Parse(rhs);
+   if(result > 0)
+    return 1;
+   else if(result < 0)
+    return -1;
+   else
+    return 0;
+  }
+
+	}
+
+}

@@ -1,0 +1,965 @@
+using System;
+using System.ComponentModel;
+using System.Diagnostics;
+using System.Drawing;
+using System.Runtime.Serialization;
+using System.Security.Cryptography;
+using System.Security.Permissions;
+using System.Text;
+using System.Collections;
+using System.Collections.Generic;
+using NewsComponents.Utils;
+using Logger = RssBandit.Common.Logging;
+using RssBandit.WinGui.Utility;
+using RssBandit.AppServices;
+namespace RssBandit {
+ [Serializable]
+ public class RssBanditPreferences: ISerializable, IUserPreferences {
+  [Flags,Serializable]
+  private enum OptionalFlags
+  {
+   AllOff = 0,
+   CustomProxy = 0x1,
+   TakeIEProxySettings = 0x2,
+   ByPassProxyOnLocal = 0x4,
+   ProxyCustomCredentials = 0x8,
+   UseRemoteStorage = 0x10,
+   ReUseFirstBrowserTab = 0x20,
+   NewsItemOpenLinkInDetailWindow = 0x40,
+   MarkFeedItemsReadOnExit = 0x80,
+   RefreshFeedsOnStartup = 0x100,
+   AllowJavascriptInBrowser = 0x200,
+   AllowJavaInBrowser = 0x400,
+   AllowActiveXInBrowser = 0x800,
+   AllowBGSoundInBrowser = 0x1000,
+   AllowVideoInBrowser = 0x2000,
+   AllowImagesInBrowser = 0x4000,
+   ShowNewItemsReceivedBalloon = 0x8000,
+   BuildRelationCosmos = 0x10000,
+   OpenNewTabsInBackground = 0x20000,
+   DisableFavicons = 0x40000,
+   AddPodcasts2ITunes = 0x80000,
+   AddPodcasts2WMP = 0x100000,
+   AddPodcasts2Folder = 0x200000,
+   SinglePodcastPlaylist = 0x400000,
+   AllowAppEventSounds = 0x800000,
+   ShowAllNewsItemsPerPage = 0x1000000,
+   DisableAutoMarkItemsRead = 0x2000000
+  }
+  private OptionalFlags allOptionalFlags;
+  private static readonly log4net.ILog _log = Logger.Log.GetLogger(typeof(RssBanditPreferences));
+  private decimal numNewsItemsPerPage = 10;
+  private string userIdentityForComments = String.Empty;
+  private string ngosSyncToken = String.Empty;
+  private string referer = String.Empty;
+  private string userName = String.Empty;
+  private string userMailAddress = String.Empty;
+  private string[] proxyBypassList = new string[]{};
+  private string proxyAddress = String.Empty;
+  private int proxyPort = 0;
+  private string proxyUser = String.Empty;
+  private string proxyPassword = String.Empty;
+  private string remoteStorageUserName = String.Empty;
+  private string remoteStoragePassword = String.Empty;
+  private RemoteStorageProtocolType remoteStorageProtocol = RemoteStorageProtocolType.UNC;
+  private string remoteStorageLocation = String.Empty;
+  private string singlePlaylistName = String.Empty;
+  private string newsItemStylesheetFile = String.Empty;
+  private HideToTray hideToTrayAction = HideToTray.OnMinimize;
+  private AutoUpdateMode autoUpdateFrequency = AutoUpdateMode.OnceIn14Days;
+  private Font normalFont;
+  private Font unreadFont;
+  private Font flagFont;
+  private Font errorFont;
+  private Font refererFont;
+  private Font newCommentsFont;
+  private Color normalFontColor = FontColorHelper.DefaultNormalColor;
+  private Color unreadFontColor = FontColorHelper.DefaultUnreadColor;
+  private Color flagFontColor = FontColorHelper.DefaultHighlightColor;
+  private Color errorFontColor = FontColorHelper.DefaultFailureColor;
+  private Color refererFontColor = FontColorHelper.DefaultReferenceColor;
+  private Color newCommentsColor = FontColorHelper.DefaultNewCommentsColor;
+  private TimeSpan maxItemAge = TimeSpan.FromDays(90);
+  private BrowserBehaviorOnNewWindow browserBehaviorOnNewWindow = BrowserBehaviorOnNewWindow.OpenNewTab;
+  private string browserCustomExecOnNewWindow = String.Empty;
+  private DisplayFeedAlertWindow feedAlertWindow = DisplayFeedAlertWindow.AsConfiguredPerFeed;
+  public decimal NumNewsItemsPerPage{
+   [DebuggerStepThrough()]
+   get { return numNewsItemsPerPage; }
+   set {
+    numNewsItemsPerPage = value;
+    EventsHelper.Fire(PropertyChanged, this,
+     new PropertyChangedEventArgs("NumNewsItemsPerPage"));
+   }
+  }
+  public string NgosSyncToken {
+   [DebuggerStepThrough()]
+   get { return ngosSyncToken; }
+   set {
+    ngosSyncToken = value;
+    EventsHelper.Fire(PropertyChanged, this,
+     new PropertyChangedEventArgs("NgosSyncToken"));
+   }
+  }
+  public string UserIdentityForComments {
+   [DebuggerStepThrough()]
+   get { return userIdentityForComments; }
+   set {
+    userIdentityForComments = value;
+    EventsHelper.Fire(PropertyChanged, this,
+     new PropertyChangedEventArgs("UserIdentityForComments"));
+   }
+  }
+  public string Referer
+  {
+   [DebuggerStepThrough()]
+   get { return referer; }
+   set { referer = value; }
+  }
+  public string UserName {
+   [DebuggerStepThrough()]
+   get { return userName; }
+   set { userName = value; }
+  }
+  public string UserMailAddress {
+   [DebuggerStepThrough()]
+   get { return userMailAddress; }
+   set { userMailAddress = value; }
+  }
+  public bool FeedRefreshOnStartup
+  {
+   [DebuggerStepThrough()]
+   get { return GetOption(OptionalFlags.RefreshFeedsOnStartup); }
+   set {
+    SetOption(OptionalFlags.RefreshFeedsOnStartup, value);
+    EventsHelper.Fire(PropertyChanged, this,
+     new PropertyChangedEventArgs("FeedRefreshOnStartup"));
+   }
+  }
+  public bool UseProxy {
+   [DebuggerStepThrough()]
+   get { return GetOption(OptionalFlags.CustomProxy); }
+   set {
+    SetOption(OptionalFlags.CustomProxy, value);
+    EventsHelper.Fire(PropertyChanged, this,
+     new PropertyChangedEventArgs("UseProxy"));
+   }
+  }
+  public bool UseIEProxySettings {
+   [DebuggerStepThrough()]
+   get { return GetOption(OptionalFlags.TakeIEProxySettings); }
+   set {
+    SetOption(OptionalFlags.TakeIEProxySettings, value);
+    EventsHelper.Fire(PropertyChanged, this,
+     new PropertyChangedEventArgs("UseIEProxySettings"));
+   }
+  }
+  public bool BypassProxyOnLocal {
+   [DebuggerStepThrough()]
+   get { return GetOption(OptionalFlags.ByPassProxyOnLocal); }
+   set {
+    SetOption(OptionalFlags.ByPassProxyOnLocal, value);
+    EventsHelper.Fire(PropertyChanged, this,
+     new PropertyChangedEventArgs("BypassProxyOnLocal"));
+   }
+  }
+  public bool MarkItemsAsReadWhenViewed {
+   [DebuggerStepThrough()]
+   get { return !GetOption(OptionalFlags.DisableAutoMarkItemsRead); }
+   set {
+    SetOption(OptionalFlags.DisableAutoMarkItemsRead, !value);
+    EventsHelper.Fire(PropertyChanged, this,
+     new PropertyChangedEventArgs("MarkItemsAsReadWhenViewed"));
+   }
+  }
+  public bool LimitNewsItemsPerPage {
+   [DebuggerStepThrough()]
+   get { return !GetOption(OptionalFlags.ShowAllNewsItemsPerPage); }
+   set {
+    SetOption(OptionalFlags.ShowAllNewsItemsPerPage, !value);
+    EventsHelper.Fire(PropertyChanged, this,
+     new PropertyChangedEventArgs("LimitNewsItemsPerPage"));
+   }
+  }
+  public string[] ProxyBypassList
+  {
+   [DebuggerStepThrough()]
+   get { return proxyBypassList; }
+   set {
+    proxyBypassList = value;
+    EventsHelper.Fire(PropertyChanged, this,
+     new PropertyChangedEventArgs("ProxyBypassList"));
+   }
+  }
+  public string ProxyAddress {
+   [DebuggerStepThrough()]
+   get { return proxyAddress; }
+   set {
+    proxyAddress = value;
+    EventsHelper.Fire(PropertyChanged, this,
+     new PropertyChangedEventArgs("ProxyAddress"));
+   }
+  }
+  public int ProxyPort {
+   [DebuggerStepThrough()]
+   get { return proxyPort; }
+   set {
+    proxyPort = value;
+    EventsHelper.Fire(PropertyChanged, this,
+     new PropertyChangedEventArgs("ProxyPort"));
+   }
+  }
+  public bool ProxyCustomCredentials {
+   [DebuggerStepThrough()]
+   get { return GetOption(OptionalFlags.ProxyCustomCredentials); }
+   set {
+    SetOption(OptionalFlags.ProxyCustomCredentials, value);
+    EventsHelper.Fire(PropertyChanged, this,
+     new PropertyChangedEventArgs("ProxyCustomCredentials"));
+   }
+  }
+  public string ProxyUser {
+   [DebuggerStepThrough()]
+   get { return proxyUser; }
+   set {
+    proxyUser = value;
+    EventsHelper.Fire(PropertyChanged, this,
+     new PropertyChangedEventArgs("ProxyUser"));
+   }
+  }
+  public string ProxyPassword {
+   [DebuggerStepThrough()]
+   get { return proxyPassword; }
+   set {
+    proxyPassword = value;
+    EventsHelper.Fire(PropertyChanged, this,
+     new PropertyChangedEventArgs("ProxyPassword"));
+   }
+  }
+  public string NewsItemStylesheetFile {
+   [DebuggerStepThrough()]
+   get { return newsItemStylesheetFile; }
+   set {
+    newsItemStylesheetFile = value;
+    EventsHelper.Fire(PropertyChanged, this,
+     new PropertyChangedEventArgs("NewsItemStylesheetFile"));
+   }
+  }
+  public string SinglePlaylistName {
+   [DebuggerStepThrough()]
+   get { return singlePlaylistName; }
+   set {
+    singlePlaylistName = value;
+    EventsHelper.Fire(PropertyChanged, this,
+     new PropertyChangedEventArgs("SinglePlaylistName"));
+   }
+  }
+  public bool ReuseFirstBrowserTab {
+   [DebuggerStepThrough()]
+   get { return GetOption(OptionalFlags.ReUseFirstBrowserTab); }
+   set {
+    SetOption(OptionalFlags.ReUseFirstBrowserTab, value);
+    EventsHelper.Fire(PropertyChanged, this,
+     new PropertyChangedEventArgs("ReuseFirstBrowserTab"));
+   }
+  }
+  public bool OpenNewTabsInBackground {
+   [DebuggerStepThrough()]
+   get { return GetOption(OptionalFlags.OpenNewTabsInBackground); }
+   set {
+    SetOption(OptionalFlags.OpenNewTabsInBackground, value);
+    EventsHelper.Fire(PropertyChanged, this,
+     new PropertyChangedEventArgs("OpenNewTabsInBackground"));
+   }
+  }
+  public bool AllowAppEventSounds {
+   [DebuggerStepThrough()]
+   get { return GetOption(OptionalFlags.AllowAppEventSounds); }
+   set {
+    SetOption(OptionalFlags.AllowAppEventSounds, value);
+    EventsHelper.Fire(PropertyChanged, this,
+     new PropertyChangedEventArgs("AllowAppEventSounds"));
+   }
+  }
+  public bool RunBanditAsWindowsUserLogon {
+   get { return Win32.Registry.RunAtStartup; }
+   set {
+    if (Win32.Registry.RunAtStartup != value)
+     Win32.Registry.RunAtStartup = value;
+   }
+  }
+  public bool SinglePodcastPlaylist {
+   [DebuggerStepThrough()]
+   get { return GetOption(OptionalFlags.SinglePodcastPlaylist); }
+   set {
+    SetOption(OptionalFlags.SinglePodcastPlaylist, value);
+    EventsHelper.Fire(PropertyChanged, this,
+     new PropertyChangedEventArgs("SinglePodcastPlaylist"));
+   }
+  }
+  public bool AddPodcasts2Folder {
+   [DebuggerStepThrough()]
+   get { return GetOption(OptionalFlags.AddPodcasts2Folder); }
+   set {
+    SetOption(OptionalFlags.AddPodcasts2Folder, value);
+    EventsHelper.Fire(PropertyChanged, this,
+     new PropertyChangedEventArgs("AddPodcasts2Folder"));
+   }
+  }
+  public bool AddPodcasts2WMP {
+   [DebuggerStepThrough()]
+   get { return GetOption(OptionalFlags.AddPodcasts2WMP); }
+   set {
+    SetOption(OptionalFlags.AddPodcasts2WMP, value);
+    EventsHelper.Fire(PropertyChanged, this,
+     new PropertyChangedEventArgs("AddPodcasts2WMP"));
+   }
+  }
+  public bool AddPodcasts2ITunes {
+   [DebuggerStepThrough()]
+   get { return GetOption(OptionalFlags.AddPodcasts2ITunes); }
+   set {
+    SetOption(OptionalFlags.AddPodcasts2ITunes, value);
+    EventsHelper.Fire(PropertyChanged, this,
+     new PropertyChangedEventArgs("AddPodcasts2ITunes"));
+   }
+  }
+  public bool UseFavicons {
+   [DebuggerStepThrough()]
+   get { return !GetOption(OptionalFlags.DisableFavicons); }
+   set {
+    SetOption(OptionalFlags.DisableFavicons, !value);
+    EventsHelper.Fire(PropertyChanged, this,
+     new PropertyChangedEventArgs("UseFavicons"));
+   }
+  }
+  public bool MarkItemsReadOnExit {
+   [DebuggerStepThrough()]
+   get { return GetOption(OptionalFlags.MarkFeedItemsReadOnExit); }
+   set {
+    SetOption(OptionalFlags.MarkFeedItemsReadOnExit, value);
+    EventsHelper.Fire(PropertyChanged, this,
+     new PropertyChangedEventArgs("MarkItemsReadOnExit"));
+   }
+  }
+  public bool NewsItemOpenLinkInDetailWindow {
+   [DebuggerStepThrough()]
+   get { return GetOption(OptionalFlags.NewsItemOpenLinkInDetailWindow); }
+   set {
+    SetOption(OptionalFlags.NewsItemOpenLinkInDetailWindow, value);
+    EventsHelper.Fire(PropertyChanged, this,
+     new PropertyChangedEventArgs("NewsItemOpenLinkInDetailWindow"));
+   }
+  }
+  public HideToTray HideToTrayAction {
+   [DebuggerStepThrough()]
+   get { return hideToTrayAction; }
+   set {
+    hideToTrayAction = value;
+    EventsHelper.Fire(PropertyChanged, this,
+     new PropertyChangedEventArgs("HideToTrayAction"));
+   }
+  }
+  public AutoUpdateMode AutoUpdateFrequency {
+   [DebuggerStepThrough()]
+   get { return autoUpdateFrequency; }
+   set {
+    autoUpdateFrequency = value;
+    EventsHelper.Fire(PropertyChanged, this,
+     new PropertyChangedEventArgs("AutoUpdateFrequency"));
+   }
+  }
+  [Obsolete("Please use the propery DateTime ICoreApplication:LastAutoUpdateCheck instead!")]
+  public DateTime LastAutoUpdateCheck {
+   get {
+    throw new NotSupportedException(
+     "Obsolete: Please use the propery DateTime ICoreApplication:LastAutoUpdateCheck instead!");
+   }
+   set {
+    throw new NotSupportedException(
+     "Obsolete: Please use the propery DateTime ICoreApplication:LastAutoUpdateCheck instead!");
+   }
+  }
+  public Font NormalFont {
+   [DebuggerStepThrough()]
+   get { return normalFont; }
+   set {
+    normalFont = value;
+    EventsHelper.Fire(PropertyChanged, this,
+     new PropertyChangedEventArgs("NormalFont"));
+   }
+  }
+  public Color NormalFontColor {
+   [DebuggerStepThrough()]
+   get { return normalFontColor; }
+   set {
+    normalFontColor = value;
+    EventsHelper.Fire(PropertyChanged, this,
+     new PropertyChangedEventArgs("NormalFontColor"));
+   }
+  }
+  public Font UnreadFont {
+   [DebuggerStepThrough()]
+   get { return unreadFont; }
+   set {
+    unreadFont = value;
+    EventsHelper.Fire(PropertyChanged, this,
+     new PropertyChangedEventArgs("UnreadFont"));
+   }
+  }
+  public Color UnreadFontColor {
+   [DebuggerStepThrough()]
+   get { return unreadFontColor; }
+   set {
+    unreadFontColor = value;
+    EventsHelper.Fire(PropertyChanged, this,
+     new PropertyChangedEventArgs("UnreadFontColor"));
+   }
+  }
+  public Font FlagFont {
+   [DebuggerStepThrough()]
+   get { return flagFont; }
+   set {
+    flagFont = value;
+    EventsHelper.Fire(PropertyChanged, this,
+     new PropertyChangedEventArgs("FlagFont"));
+   }
+  }
+  public Color FlagFontColor {
+   [DebuggerStepThrough()]
+   get { return flagFontColor; }
+   set {
+    flagFontColor = value;
+    EventsHelper.Fire(PropertyChanged, this,
+     new PropertyChangedEventArgs("FlagFontColor"));
+   }
+  }
+  public Font RefererFont {
+   [DebuggerStepThrough()]
+   get { return refererFont; }
+   set {
+    refererFont = value;
+    EventsHelper.Fire(PropertyChanged, this,
+     new PropertyChangedEventArgs("RefererFont"));
+   }
+  }
+  public Color RefererFontColor {
+   [DebuggerStepThrough()]
+   get { return refererFontColor; }
+   set {
+    refererFontColor = value;
+    EventsHelper.Fire(PropertyChanged, this,
+     new PropertyChangedEventArgs("RefererFontColor"));
+   }
+  }
+  public Font ErrorFont {
+   [DebuggerStepThrough()]
+   get { return errorFont; }
+   set {
+    errorFont = value;
+    EventsHelper.Fire(PropertyChanged, this,
+     new PropertyChangedEventArgs("ErrorFont"));
+   }
+  }
+  public Color ErrorFontColor {
+   [DebuggerStepThrough()]
+   get { return errorFontColor; }
+   set {
+    errorFontColor = value;
+    EventsHelper.Fire(PropertyChanged, this,
+     new PropertyChangedEventArgs("ErrorFontColor"));
+   }
+  }
+  public Font NewCommentsFont {
+   [DebuggerStepThrough()]
+   get { return newCommentsFont; }
+   set {
+    newCommentsFont = value;
+    EventsHelper.Fire(PropertyChanged, this,
+     new PropertyChangedEventArgs("NewCommentsFont"));
+   }
+  }
+  public Color NewCommentsFontColor {
+   [DebuggerStepThrough()]
+   get { return newCommentsColor; }
+   set {
+    newCommentsColor = value;
+    EventsHelper.Fire(PropertyChanged, this,
+     new PropertyChangedEventArgs("NewCommentsFontColor"));
+   }
+  }
+  public TimeSpan MaxItemAge {
+   [DebuggerStepThrough()]
+   get { return maxItemAge; }
+   set {
+    maxItemAge = value;
+    EventsHelper.Fire(PropertyChanged, this,
+     new PropertyChangedEventArgs("MaxItemAge"));
+   }
+  }
+  public bool UseRemoteStorage {
+   [DebuggerStepThrough()]
+   get { return GetOption(OptionalFlags.UseRemoteStorage); }
+   set {
+    SetOption(OptionalFlags.UseRemoteStorage, value);
+    EventsHelper.Fire(PropertyChanged, this,
+     new PropertyChangedEventArgs("UseRemoteStorage"));
+   }
+  }
+  public string RemoteStorageUserName {
+   [DebuggerStepThrough()]
+   get { return remoteStorageUserName; }
+   set {
+    remoteStorageUserName = value;
+    EventsHelper.Fire(PropertyChanged, this,
+     new PropertyChangedEventArgs("RemoteStorageUserName"));
+   }
+  }
+  public string RemoteStoragePassword {
+   [DebuggerStepThrough()]
+   get { return remoteStoragePassword; }
+   set {
+    remoteStoragePassword = value;
+    EventsHelper.Fire(PropertyChanged, this,
+     new PropertyChangedEventArgs("RemoteStoragePassword"));
+   }
+  }
+  public RemoteStorageProtocolType RemoteStorageProtocol {
+   [DebuggerStepThrough()]
+   get { return remoteStorageProtocol; }
+   set {
+    remoteStorageProtocol = value;
+    EventsHelper.Fire(PropertyChanged, this,
+     new PropertyChangedEventArgs("RemoteStorageProtocol"));
+   }
+  }
+  public string RemoteStorageLocation {
+   [DebuggerStepThrough()]
+   get { return remoteStorageLocation; }
+   set {
+    remoteStorageLocation = value;
+    EventsHelper.Fire(PropertyChanged, this,
+     new PropertyChangedEventArgs("RemoteStorageLocation"));
+   }
+  }
+  public BrowserBehaviorOnNewWindow BrowserOnNewWindow {
+   [DebuggerStepThrough()]
+   get { return browserBehaviorOnNewWindow; }
+   set {
+    browserBehaviorOnNewWindow = value;
+    EventsHelper.Fire(PropertyChanged, this,
+     new PropertyChangedEventArgs("BrowserOnNewWindow"));
+   }
+  }
+  public string BrowserCustomExecOnNewWindow {
+   [DebuggerStepThrough()]
+   get { return browserCustomExecOnNewWindow; }
+   set {
+    if (value == null)
+     browserCustomExecOnNewWindow = String.Empty;
+     else
+     browserCustomExecOnNewWindow = value;
+    EventsHelper.Fire(PropertyChanged, this,
+     new PropertyChangedEventArgs("BrowserCustomExecOnNewWindow"));
+   }
+  }
+  public bool BrowserJavascriptAllowed {
+   [DebuggerStepThrough()]
+   get { return GetOption(OptionalFlags.AllowJavascriptInBrowser); }
+   set {
+    SetOption(OptionalFlags.AllowJavascriptInBrowser, value);
+    EventsHelper.Fire(PropertyChanged, this,
+     new PropertyChangedEventArgs("BrowserJavascriptAllowed"));
+   }
+  }
+  public bool BrowserJavaAllowed {
+   [DebuggerStepThrough()]
+   get { return GetOption(OptionalFlags.AllowJavaInBrowser); }
+   set {
+    SetOption(OptionalFlags.AllowJavaInBrowser, value);
+    EventsHelper.Fire(PropertyChanged, this,
+     new PropertyChangedEventArgs("BrowserJavaAllowed"));
+   }
+  }
+  public bool BrowserActiveXAllowed {
+   [DebuggerStepThrough()]
+   get { return GetOption(OptionalFlags.AllowActiveXInBrowser); }
+   set {
+    SetOption(OptionalFlags.AllowActiveXInBrowser, value);
+    EventsHelper.Fire(PropertyChanged, this,
+     new PropertyChangedEventArgs("BrowserActiveXAllowed"));
+   }
+  }
+  public bool BrowserBGSoundAllowed {
+   [DebuggerStepThrough()]
+   get { return GetOption(OptionalFlags.AllowBGSoundInBrowser); }
+   set {
+    SetOption(OptionalFlags.AllowBGSoundInBrowser, value);
+    EventsHelper.Fire(PropertyChanged, this,
+     new PropertyChangedEventArgs("BrowserBGSoundAllowed"));
+   }
+  }
+  public bool BrowserVideoAllowed {
+   [DebuggerStepThrough()]
+   get { return GetOption(OptionalFlags.AllowVideoInBrowser); }
+   set {
+    SetOption(OptionalFlags.AllowVideoInBrowser, value);
+    EventsHelper.Fire(PropertyChanged, this,
+     new PropertyChangedEventArgs("BrowserVideoAllowed"));
+   }
+  }
+  public bool BrowserImagesAllowed {
+   [DebuggerStepThrough()]
+   get { return GetOption(OptionalFlags.AllowImagesInBrowser); }
+   set {
+    SetOption(OptionalFlags.AllowImagesInBrowser, value);
+    EventsHelper.Fire(PropertyChanged, this,
+     new PropertyChangedEventArgs("BrowserImagesAllowed"));
+   }
+  }
+  public DisplayFeedAlertWindow ShowAlertWindow {
+   [DebuggerStepThrough()]
+   get { return feedAlertWindow; }
+   set {
+    feedAlertWindow = value;
+    EventsHelper.Fire(PropertyChanged, this,
+     new PropertyChangedEventArgs("ShowAlertWindow"));
+   }
+  }
+  public bool ShowNewItemsReceivedBalloon {
+   [DebuggerStepThrough()]
+   get { return GetOption(OptionalFlags.ShowNewItemsReceivedBalloon); }
+   set {
+    SetOption(OptionalFlags.ShowNewItemsReceivedBalloon, value);
+    EventsHelper.Fire(PropertyChanged, this,
+     new PropertyChangedEventArgs("ShowNewItemsReceivedBalloon"));
+   }
+  }
+  public bool BuildRelationCosmos {
+   [DebuggerStepThrough()]
+   get { return true; }
+   set {
+   }
+  }
+  private bool GetOption(OptionalFlags flag) {
+   return ( (this.allOptionalFlags & flag) == flag );
+  }
+  private void SetOption(OptionalFlags flag, bool value) {
+   if (value)
+    this.allOptionalFlags |= flag;
+   else
+    this.allOptionalFlags = this.allOptionalFlags & ~flag;
+  }
+  public RssBanditPreferences() {
+   InitDefaults();
+  }
+  private void InitDefaults() {
+   normalFont = FontColorHelper.DefaultNormalFont;
+   unreadFont = FontColorHelper.DefaultUnreadFont;
+   flagFont = FontColorHelper.DefaultHighlightFont;
+   errorFont = FontColorHelper.DefaultFailureFont;
+   refererFont = FontColorHelper.DefaultReferenceFont;
+   newCommentsFont = FontColorHelper.DefaultNewCommentsFont;
+   this.allOptionalFlags = DefaultOptionalFlags;
+  }
+  private OptionalFlags DefaultOptionalFlags {
+   get {
+    OptionalFlags f = OptionalFlags.AllOff;
+    f |= OptionalFlags.ByPassProxyOnLocal |
+     OptionalFlags.ShowNewItemsReceivedBalloon |
+     OptionalFlags.AllowImagesInBrowser |
+     OptionalFlags.NewsItemOpenLinkInDetailWindow |
+     OptionalFlags.ReUseFirstBrowserTab |
+     OptionalFlags.AllowAppEventSounds |
+     OptionalFlags.AllowJavascriptInBrowser |
+                    OptionalFlags.AllowActiveXInBrowser |
+                    OptionalFlags.BuildRelationCosmos;
+    return f;
+   }
+  }
+  protected RssBanditPreferences(SerializationInfo info, StreamingContext context) {
+   InitDefaults();
+   SerializationInfoReader reader = new SerializationInfoReader(info);
+   int version = reader.GetInt("_PrefsVersion", 0);
+   EncryptionHelper.CompatibilityMode = (version <= 20);
+   this.allOptionalFlags = (OptionalFlags)reader.GetValue("AllOptionalFlags", typeof(OptionalFlags), DefaultOptionalFlags);
+   if (reader.Contains("UseProxy"))
+    UseProxy = reader.GetBoolean("UseProxy", false);
+   ProxyAddress = reader.GetString("ProxyAddress", String.Empty);
+   ProxyPort = reader.GetInt("ProxyPort", 8080);
+   ProxyUser = EncryptionHelper.Decrypt(reader.GetString("ProxyUser", String.Empty));
+   ProxyPassword = EncryptionHelper.Decrypt(reader.GetString("ProxyPassword", String.Empty));
+   if (reader.Contains("BypassProxyOnLocal"))
+    BypassProxyOnLocal = reader.GetBoolean("BypassProxyOnLocal", true);
+   if (reader.Contains("ProxyCustomCredentials"))
+    ProxyCustomCredentials = reader.GetBoolean("ProxyCustomCredentials", false);
+   NewsItemStylesheetFile = reader.GetString("NewsItemStylesheetFile", String.Empty);
+   if (version < 18) {
+    UserName = reader.GetString("UserName", String.Empty);
+    UserMailAddress = reader.GetString("UserMailAddress", String.Empty);
+    Referer = reader.GetString("Referer", String.Empty);
+   }
+   HideToTrayAction = (HideToTray)reader.GetValue("HideToTrayAction",typeof(HideToTray), HideToTray.OnMinimize);
+   AutoUpdateFrequency = (AutoUpdateMode)reader.GetValue("AutoUpdateFrequency",typeof(AutoUpdateMode), AutoUpdateMode.OnceIn14Days);
+   if (reader.Contains("NormalFontString"))
+    NormalFont = reader.GetFont("NormalFontString", FontColorHelper.DefaultNormalFont);
+   else
+    NormalFont = (Font)reader.GetValue("NormalFont",typeof(Font),FontColorHelper.DefaultNormalFont);
+   if (reader.Contains("UnreadFontString"))
+    UnreadFont = reader.GetFont("UnreadFontString", FontColorHelper.DefaultUnreadFont);
+   else if (reader.Contains("HighlightFontString"))
+    UnreadFont = reader.GetFont("HighlightFontString", FontColorHelper.DefaultUnreadFont);
+   else
+    UnreadFont = (Font)reader.GetValue("HighlightFont", typeof(Font), FontColorHelper.DefaultUnreadFont);
+   if (reader.Contains("FlagFontString"))
+    FlagFont = reader.GetFont("FlagFontString", FontColorHelper.DefaultHighlightFont);
+   else
+    FlagFont = (Font)reader.GetValue("FlagFont",typeof(Font), FontColorHelper.DefaultHighlightFont);
+   if (reader.Contains("ErrorFontString"))
+    ErrorFont = reader.GetFont("ErrorFontString", FontColorHelper.DefaultFailureFont);
+   else
+    ErrorFont = (Font)reader.GetValue("ErrorFont",typeof(Font), FontColorHelper.DefaultFailureFont);
+   if (reader.Contains("RefererFontString"))
+    RefererFont = reader.GetFont("RefererFontString", FontColorHelper.DefaultReferenceFont);
+   else
+    RefererFont = (Font)reader.GetValue("RefererFont",typeof(Font), FontColorHelper.DefaultReferenceFont);
+   NewCommentsFont = reader.GetFont("NewCommentsFontString", FontColorHelper.DefaultNewCommentsFont);
+   NormalFontColor = (Color)reader.GetValue("NormalFontColor",typeof(Color), FontColorHelper.DefaultNormalColor);
+   if (reader.Contains("UnreadFontColor"))
+    UnreadFontColor = (Color)reader.GetValue("UnreadFontColor",typeof(Color), FontColorHelper.DefaultUnreadColor);
+   else
+    UnreadFontColor = (Color)reader.GetValue("HighlightFontColor",typeof(Color), FontColorHelper.DefaultUnreadColor);
+   FlagFontColor = (Color)reader.GetValue("FlagFontColor",typeof(Color), FontColorHelper.DefaultHighlightColor);
+   ErrorFontColor = (Color)reader.GetValue("ErrorFontColor",typeof(Color), FontColorHelper.DefaultFailureColor);
+   RefererFontColor = (Color)reader.GetValue("RefererFontColor",typeof(Color), FontColorHelper.DefaultReferenceColor);
+   NewCommentsFontColor = (Color)reader.GetValue("NewCommentsFontColor",typeof(Color), FontColorHelper.DefaultNewCommentsColor);
+   MaxItemAge = TimeSpan.FromTicks(reader.GetLong("MaxItemAge", TimeSpan.FromDays(90).Ticks));
+   if (reader.Contains("UseRemoteStorage"))
+    UseRemoteStorage = reader.GetBoolean("UseRemoteStorage", false);
+   if (reader.Contains("RemoteStorageUserName")) {
+    RemoteStorageUserName = reader.GetString("RemoteStorageUserName", String.Empty);
+   } else {
+    RemoteStorageUserName = EncryptionHelper.Decrypt(reader.GetString("RemoteStorageUserNameCrypted", String.Empty));
+   }
+   if (reader.Contains("RemoteStoragePassword")) {
+    RemoteStoragePassword = reader.GetString("RemoteStoragePassword", String.Empty);
+   } else {
+    RemoteStoragePassword = EncryptionHelper.Decrypt(reader.GetString("RemoteStoragePasswordCrypted", String.Empty));
+   }
+   RemoteStorageProtocol = (RemoteStorageProtocolType)reader.GetValue("RemoteStorageProtocol", RemoteStorageProtocol.GetType(), RemoteStorageProtocolType.Unknown);
+   RemoteStorageLocation = reader.GetString("RemoteStorageLocation", String.Empty);
+   if (UseRemoteStorage && RemoteStorageProtocol == RemoteStorageProtocolType.dasBlog_1_3) {
+    UseRemoteStorage = false;
+   }
+   BrowserOnNewWindow = (BrowserBehaviorOnNewWindow)reader.GetValue("BrowserOnNewWindow", typeof(BrowserBehaviorOnNewWindow), BrowserBehaviorOnNewWindow.OpenNewTab);
+   BrowserCustomExecOnNewWindow = reader.GetString("BrowserCustomExecOnNewWindow", String.Empty);
+   if (reader.Contains("NewsItemOpenLinkInDetailWindow")) {
+    NewsItemOpenLinkInDetailWindow = reader.GetBoolean("NewsItemOpenLinkInDetailWindow", true);
+   }
+   if (reader.Contains("UseIEProxySettings")) {
+    UseIEProxySettings = reader.GetBoolean("UseIEProxySettings", false);
+   }
+   if (reader.Contains("FeedRefreshOnStartup")) {
+    FeedRefreshOnStartup = reader.GetBoolean("FeedRefreshOnStartup", false);
+   }
+   if (reader.Contains("BrowserJavascriptAllowed")) {
+    BrowserJavascriptAllowed = reader.GetBoolean("BrowserJavascriptAllowed", true);
+   }
+   if (reader.Contains("BrowserJavaAllowed")) {
+    BrowserJavaAllowed = reader.GetBoolean("BrowserJavaAllowed", false);
+   }
+   if (reader.Contains("BrowserActiveXAllowed")) {
+    BrowserActiveXAllowed = reader.GetBoolean("BrowserActiveXAllowed", false);
+   }
+   if (reader.Contains("BrowserBGSoundAllowed")) {
+    BrowserBGSoundAllowed = reader.GetBoolean("BrowserBGSoundAllowed", false);
+   }
+   if (reader.Contains("BrowserVideoAllowed")) {
+    BrowserVideoAllowed = reader.GetBoolean("BrowserVideoAllowed", false);
+   }
+   if (reader.Contains("BrowserImagesAllowed")) {
+    BrowserImagesAllowed = reader.GetBoolean("BrowserImagesAllowed", true);
+   }
+   if (reader.Contains("ShowConfiguredAlertWindows")) {
+    bool showConfiguredAlertWindows = reader.GetBoolean("ShowConfiguredAlertWindows", false);
+    if (showConfiguredAlertWindows) {
+     ShowAlertWindow = DisplayFeedAlertWindow.AsConfiguredPerFeed;
+    } else {
+     ShowAlertWindow = DisplayFeedAlertWindow.None;
+    }
+   } else {
+    ShowAlertWindow = (DisplayFeedAlertWindow)reader.GetValue("ShowAlertWindow", typeof(DisplayFeedAlertWindow), DisplayFeedAlertWindow.AsConfiguredPerFeed);
+   }
+   if (reader.Contains("ShowNewItemsReceivedBalloon")) {
+    ShowNewItemsReceivedBalloon = reader.GetBoolean("ShowNewItemsReceivedBalloon", true);
+   }
+   ProxyBypassList = (string[])reader.GetValue("ProxyBypassList", typeof(string[]), new string[]{});
+   if (ProxyBypassList == null)
+    ProxyBypassList = new string[]{};
+   if (reader.Contains("MarkItemsReadOnExit")) {
+    MarkItemsReadOnExit = reader.GetBoolean("MarkItemsReadOnExit", false);
+   }
+   UserIdentityForComments = reader.GetString("UserIdentityForComments", String.Empty);
+   if (reader.Contains("ReuseFirstBrowserTab")) {
+    ReuseFirstBrowserTab = reader.GetBoolean("ReuseFirstBrowserTab", true);
+   }
+   this.NgosSyncToken = reader.GetString("NgosSyncToken", String.Empty);
+   this.NumNewsItemsPerPage = reader.GetDecimal("NumNewsItemsPerPage", 10);
+  }
+  [SecurityPermissionAttribute(SecurityAction.Demand, SerializationFormatter=true),
+   SecurityPermissionAttribute(SecurityAction.LinkDemand)]
+  public virtual void GetObjectData(SerializationInfo info, StreamingContext context) {
+   info.AddValue("_PrefsVersion", 23);
+   EncryptionHelper.CompatibilityMode = false;
+   info.AddValue("ProxyAddress", ProxyAddress);
+   info.AddValue("ProxyPort", ProxyPort);
+   info.AddValue("ProxyUser", EncryptionHelper.Encrypt(ProxyUser));
+   info.AddValue("ProxyPassword", EncryptionHelper.Encrypt(ProxyPassword));
+   info.AddValue("ProxyBypassList", ProxyBypassList);
+   info.AddValue("NewsItemStylesheetFile", NewsItemStylesheetFile);
+   info.AddValue("HideToTrayAction", HideToTrayAction);
+   info.AddValue("AutoUpdateFrequency", AutoUpdateFrequency);
+   info.AddValue("NormalFontString", SerializationInfoReader.ConvertFont(NormalFont));
+   info.AddValue("HighlightFontString", SerializationInfoReader.ConvertFont(UnreadFont));
+   info.AddValue("FlagFontString", SerializationInfoReader.ConvertFont(FlagFont));
+   info.AddValue("ErrorFontString", SerializationInfoReader.ConvertFont(ErrorFont));
+   info.AddValue("RefererFontString", SerializationInfoReader.ConvertFont(RefererFont));
+   info.AddValue("NewCommentsFontString", SerializationInfoReader.ConvertFont(NewCommentsFont));
+   info.AddValue("NormalFontColor", NormalFontColor);
+   info.AddValue("UnreadFontColor", UnreadFontColor);
+   info.AddValue("FlagFontColor", FlagFontColor);
+   info.AddValue("ErrorFontColor", ErrorFontColor);
+   info.AddValue("RefererFontColor", RefererFontColor);
+   info.AddValue("NewCommentsFontColor", NewCommentsFontColor);
+   info.AddValue("MaxItemAge", MaxItemAge.Ticks);
+   info.AddValue("RemoteStorageUserNameCrypted", EncryptionHelper.Encrypt(RemoteStorageUserName));
+   info.AddValue("RemoteStoragePasswordCrypted", EncryptionHelper.Encrypt(RemoteStoragePassword));
+   info.AddValue("RemoteStorageProtocol", RemoteStorageProtocol);
+   info.AddValue("RemoteStorageLocation", RemoteStorageLocation);
+   info.AddValue("BrowserOnNewWindow", BrowserOnNewWindow);
+   info.AddValue("BrowserCustomExecOnNewWindow", BrowserCustomExecOnNewWindow);
+   info.AddValue("ShowAlertWindow", ShowAlertWindow);
+   info.AddValue("UserIdentityForComments", UserIdentityForComments);
+   info.AddValue("AllOptionalFlags", this.allOptionalFlags);
+   info.AddValue("NgosSyncToken", this.NgosSyncToken);
+   info.AddValue("NumNewsItemsPerPage", this.NumNewsItemsPerPage);
+  }
+  public event PropertyChangedEventHandler PropertyChanged;
+  private class EncryptionHelper {
+   private static TripleDESCryptoServiceProvider _des;
+   private static bool _compatibilityMode = false;
+   private EncryptionHelper(){}
+   static EncryptionHelper() {
+    _des = new TripleDESCryptoServiceProvider();
+    _des.Key = _calcHash();
+    _des.Mode = CipherMode.ECB;
+   }
+   internal static bool CompatibilityMode {
+    get { return _compatibilityMode; }
+    set {
+     if (value != _compatibilityMode)
+      _des.Key = _calcHash();
+     _compatibilityMode = value;
+    }
+   }
+   public static string Decrypt(string str) {
+    byte[] base64;
+    byte[] bytes;
+    string ret;
+    if (str == null)
+     ret = null;
+    else {
+     if (str.Length == 0)
+      ret = String.Empty;
+     else {
+      try {
+       base64 = Convert.FromBase64String(str);
+       bytes = _des.CreateDecryptor().TransformFinalBlock(base64, 0, base64.GetLength(0));
+       ret = Encoding.Unicode.GetString(bytes);
+      }
+      catch (Exception e) {
+       _log.Debug("Exception in Decrypt", e);
+       ret = String.Empty;
+      }
+     }
+    }
+    return ret;
+   }
+   public static string Encrypt(string str) {
+    byte[] inBytes;
+    byte[] bytes;
+    string ret;
+    if (str == null)
+     ret = null;
+    else {
+     if (str.Length == 0)
+      ret = String.Empty;
+     else {
+      try {
+       inBytes = Encoding.Unicode.GetBytes(str);
+       bytes = _des.CreateEncryptor().TransformFinalBlock(inBytes, 0, inBytes.GetLength(0));
+       ret = Convert.ToBase64String(bytes);
+      }
+      catch (Exception e) {
+       _log.Debug("Exception in Encrypt", e);
+       ret = String.Empty;
+      }
+     }
+    }
+    return ret;
+   }
+   private static byte[] _calcHash() {
+    string salt = null;
+    if (_compatibilityMode) {
+     salt = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+    } else {
+     salt = "B*A!N_D:I;T,P1E0P%P$E+R";
+    }
+    byte[] b = Encoding.Unicode.GetBytes(salt);
+    int bLen = b.GetLength(0);
+    Random r = new Random(1500450271);
+    byte[] res = new Byte[500];
+    int i = 0;
+    for (i = 0; i < bLen && i < 500; i++)
+     res[i] = (byte)(b[i] ^ r.Next(30, 127));
+    while (i < 500) {
+     res[i] = (byte)r.Next(30, 127);
+     i++;
+    }
+    MD5CryptoServiceProvider csp = new MD5CryptoServiceProvider();
+    return csp.ComputeHash(res);
+   }
+  }
+  internal class DeserializationTypeBinder: SerializationBinder {
+            private static List<string> movedTypes = new List<string>(
+    new string[]{"RssBandit.HideToTray",
+        "RssBandit.AutoUpdateMode",
+        "RssBandit.RemoteStorageProtocolType",
+        "RssBandit.BrowserBehaviorOnNewWindow",
+        "RssBandit.DisplayFeedAlertWindow"});
+   public override System.Type BindToType(string assemblyName, string typeName)
+   {
+    System.Type typeToDeserialize = null;
+    if (movedTypes.Contains(typeName)) {
+     int index = assemblyName.IndexOf("AppServices");
+     if (index < 0) {
+      typeToDeserialize = Type.GetType(String.Format("{0}, {1}",
+       typeName, "RssBandit.AppServices"));
+     }
+     else if (index > 0)
+     {
+      typeToDeserialize = Type.GetType(String.Format("{0}, {1}",
+       typeName, "RssBandit.AppServices"));
+     }
+    }
+    string typeVer1 = "RSSBandit.";
+    if (typeName.IndexOf(typeVer1) == 0 ) {
+     typeName = typeName.Replace(typeVer1, "RssBandit.");
+     typeToDeserialize = Type.GetType(String.Format("{0}, {1}",
+      typeName, assemblyName));
+    }
+    return typeToDeserialize;
+   }
+  }
+ }
+}

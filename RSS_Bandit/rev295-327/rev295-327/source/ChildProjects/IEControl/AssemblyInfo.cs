@@ -1,0 +1,12 @@
+using System.Reflection; 
+[assembly: AssemblyTitle("IEControl")]
+[assembly: AssemblyDescription("Internet Explorer Control")]
+[assembly: AssemblyConfiguration("")]
+[assembly: AssemblyCompany("")]
+[assembly: AssemblyProduct("")]
+[assembly: AssemblyCopyright("(C) 2003-2006 by Torsten Rendelmann; http://www.rendelmann.info/blog/")]
+[assembly: AssemblyTrademark("")]
+[assembly: AssemblyCulture("")]
+[assembly: AssemblyDelaySign(false)]
+[assembly: AssemblyKeyFile("")]
+[assembly: AssemblyKeyName("")]
